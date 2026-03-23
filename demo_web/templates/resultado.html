@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Resultado del análisis</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 760px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .box {
+            border: 1px solid #ccc;
+            padding: 24px;
+            border-radius: 10px;
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        .dato {
+            margin-bottom: 10px;
+        }
+
+        .acciones a {
+            display: inline-block;
+            margin-right: 12px;
+            margin-top: 14px;
+            padding: 10px 16px;
+            border: 1px solid #999;
+            text-decoration: none;
+            border-radius: 8px;
+            color: black;
+        }
+
+        .acciones a:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="box">
+
+    <h1>Resultado del análisis</h1>
+
+    <div class="dato"><strong>Vertical detectada:</strong> {{ vertical }}</div>
+    <div class="dato"><strong>Tipo de contrato:</strong> {{ resumen.tipo_contrato }}</div>
+    <div class="dato"><strong>Score total:</strong> {{ resumen.score_total }} / 100</div>
+    <div class="dato">
+        <em>El score resume cuantitativamente el nivel de riesgo detectado.</em>
+    </div>
+    <div class="dato"><strong>Nivel de riesgo:</strong> {{ resumen.nivel_riesgo }}</div>
+    <div class="dato"><strong>Cantidad de riesgos:</strong> {{ resumen.cantidad_riesgos }}</div>
+
+    <div class="acciones">
+        <a href="/descargar/json/{{ json_nombre }}">Descargar JSON</a>
+        <a href="/descargar/word/{{ word_nombre }}">Descargar Word</a>
+        <a href="/">Analizar otro contrato</a>
+    </div>
+
+</div>
+
+</body>
+</html>

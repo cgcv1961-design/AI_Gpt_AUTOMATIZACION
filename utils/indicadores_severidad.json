@@ -1,0 +1,86 @@
+{
+  "alta": {
+    "reglas": [
+      {
+        "tipo": "combinada",
+        "contiene_todas": ["responsabilidad", "ilimitada"]
+      },
+      {
+        "tipo": "combinada",
+        "contiene_todas": ["indemnización", "ilimitada"]
+      },
+      {
+        "tipo": "combinada",
+        "contiene_todas": ["renuncia", "derechos"]
+      },
+      {
+        "tipo": "frase",
+        "contiene": "cláusula abusiva"
+      }
+    ]
+  },
+  "media-alta": {
+    "reglas": [
+      {
+        "tipo": "combinada",
+        "contiene_todas": ["suspensión", "pago"]
+      },
+      {
+        "tipo": "combinada",
+        "contiene_todas": ["exonerado", "responsabilidad"]
+      },
+      {
+        "tipo": "combinada",
+        "contiene_todas": ["indemnización", "elevada"]
+      },
+      {
+        "tipo": "frase",
+        "contiene": "mora automática"
+      },
+      {
+        "tipo": "frase",
+        "contiene": "rescisión unilateral"
+      },
+      {
+        "tipo": "frase",
+        "contiene": "terminación anticipada"
+      },
+      {
+        "tipo": "frase",
+        "contiene": "desahucio"
+      }
+    ]
+  },
+  "media": {
+    "reglas": [
+      {
+        "tipo": "frase",
+        "contiene": "renovación automática"
+      },
+      {
+        "tipo": "frase",
+        "contiene": "prórroga automática"
+      },
+      {
+        "tipo": "frase",
+        "contiene": "ambigüedad"
+      },
+      {
+        "tipo": "frase",
+        "contiene": "falta de precisión"
+      },
+      {
+        "tipo": "frase",
+        "contiene": "modificación unilateral"
+      },
+      {
+        "tipo": "frase",
+        "contiene": "puede generar conflictos"
+      },
+      {
+        "tipo": "frase",
+        "contiene": "puede generar disputas"
+      }
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Demo Análisis Contractual</title>
+    <style>
+        body {
+            font-family: Calibri, sans-serif;
+            margin: 60px;
+        }
+        h1 {
+            font-weight: 600;
+        }
+        .container {
+            max-width: 500px;
+        }
+        button {
+            padding: 10px 18px;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        input {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Análisis Contractual Automatizado</h1>
+        <p>
+            Suba un contrato en formato PDF, DOCX o TXT para generar un informe de análisis estructural.
+        </p>
+
+        <form action="/demo-analizar" method="post" enctype="multipart/form-data">
+            <input type="file" name="archivo" required>
+            <br>
+            <button type="submit">Analizar y Generar Informe</button>
+        </form>
+    </div>
+</body>
+</html>

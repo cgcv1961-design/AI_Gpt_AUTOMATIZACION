@@ -1,0 +1,65 @@
+{
+  "tipo_contrato": "Contrato de arrendamiento de vivienda",
+  "partes": [
+    "EDDIE MORI (locador)",
+    "CARLOS GUSTAVO CAPUTI (arrendatario)",
+    "MONICA ELIZABETH SANTAVEC VILA (arrendataria)"
+  ],
+  "duracion_meses": 36,
+  "precio_mensual": 760,
+  "moneda": "EUR",
+  "riesgos_detectados": [
+    {
+      "descripcion": "El contrato establece una prórroga automática de dos años si no hay comunicación expresa de no renovación, lo que puede generar incertidumbre para ambas partes.",
+      "severidad": "media",
+      "impacto": "legal"
+    },
+    {
+      "descripcion": "El locador puede rescindir el contrato para destinar el inmueble a otros usos o venderlo, lo que puede afectar la estabilidad del arrendatario.",
+      "severidad": "alta",
+      "impacto": "operativo"
+    },
+    {
+      "descripcion": "El arrendatario debe pagar el depósito de garantía que genera intereses legales, pero el contrato no especifica claramente el procedimiento para su devolución en caso de incumplimiento.",
+      "severidad": "media",
+      "impacto": "financiero"
+    },
+    {
+      "descripcion": "El arrendatario no puede suspender o retrasar pagos por reclamaciones, lo que puede generar mora inmediata y posibles sanciones.",
+      "severidad": "alta",
+      "impacto": "financiero"
+    },
+    {
+      "descripcion": "Prohibición expresa de subarrendamiento y comodato sin consentimiento, lo que limita la flexibilidad del arrendatario.",
+      "severidad": "media",
+      "impacto": "operativo"
+    },
+    {
+      "descripcion": "El arrendatario debe permitir visitas semanales para mostrar el inmueble en caso de venta o reingreso anticipado, lo que puede afectar su privacidad.",
+      "severidad": "baja",
+      "impacto": "legal"
+    },
+    {
+      "descripcion": "El arrendatario asume responsabilidades de mantenimiento y control de ciertos sistemas (como el térmico autónomo), lo que puede generar costos adicionales no previstos.",
+      "severidad": "media",
+      "impacto": "financiero"
+    },
+    {
+      "descripcion": "El contrato remite a múltiples normativas y acuerdos externos para la regulación de aspectos importantes, lo que puede generar dificultades interpretativas y de cumplimiento.",
+      "severidad": "media",
+      "impacto": "legal"
+    }
+  ],
+  "evaluacion_general": {
+    "score_riesgo": {
+      "nivel": "medio",
+      "valor": 22,
+      "fundamento": "Cálculo automático basado en metodología objetiva (algoritmo 2.0_core)."
+    }
+  },
+  "metadata_sistema": {
+    "vertical": "general",
+    "perfil": "basico",
+    "version_motor": "2.1"
+  }
+}
