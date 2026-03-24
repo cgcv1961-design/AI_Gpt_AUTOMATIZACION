@@ -1,0 +1,7 @@
+# Requerimientos del sistema
+
+fastapi
+uvicorn
+openai
+pydantic
+python-docx
