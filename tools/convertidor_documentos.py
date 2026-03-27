@@ -42,8 +42,8 @@ Este archivo luego será utilizado por el motor de análisis contractual.
 
 import json
 import os
-import tkinter as tk
-from tkinter import filedialog
+#  import tkinter as tk   se eliminaron para correr en Render
+#  from tkinter import filedialog
 
 from docx import Document
 from odf.opendocument import load
