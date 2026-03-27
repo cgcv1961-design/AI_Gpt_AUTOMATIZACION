@@ -6,3 +6,6 @@ openai
 pydantic
 python-docx
 jinja2>=3.1.0
+odfpy>=1.4.1
+
+
