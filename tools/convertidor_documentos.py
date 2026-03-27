@@ -250,7 +250,6 @@ def extraer_texto_pdf(ruta_archivo):
     # Devolvemos lo poco que se haya podido extraer.
     return texto_extraido
 
-
 def extraer_texto(ruta_archivo):
     """
     Detecta el tipo de archivo y extrae su texto.
@@ -344,4 +343,3 @@ if __name__ == "__main__":
     except Exception as e:
         print("\n❌ Ocurrió un error:")
         print(e)
-        
