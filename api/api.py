@@ -96,6 +96,67 @@ def html_debug_page(titulo: str, contenido: str) -> HTMLResponse:
     )
 
 
+def obtener_tipo_contrato(salida: dict, resumen: dict) -> str:
+    """
+    Obtiene el tipo de contrato priorizando el JSON estructurado.
+    Funciona tanto para GENERAL como para AUDIOVISUAL.
+    """
+    if not isinstance(salida, dict):
+        return "-"
+
+    nucleo = salida.get("nucleo_contractual", {}) or {}
+
+    return (
+        nucleo.get("tipo_contrato")
+        or resumen.get("tipo_contrato")
+        or "-"
+    )
+
+
+def obtener_cantidad_riesgos(salida: dict, resumen: dict) -> int:
+    """
+    Obtiene cantidad de riesgos desde scoring si existe.
+    Si no, usa el resumen recibido.
+    """
+    if not isinstance(salida, dict):
+        return resumen.get("cantidad_riesgos", 0)
+
+    scoring = salida.get("scoring", {}) or {}
+    metricas = scoring.get("metricas", {}) or {}
+
+    return (
+        metricas.get("cantidad_riesgos")
+        or resumen.get("cantidad_riesgos")
+        or 0
+    )
+
+
+def obtener_resumen_ejecutivo(salida: dict, resumen: dict) -> str:
+    """
+    Arma una interpretación ejecutiva útil para la UI.
+
+    Prioridades:
+    1. resumen.resumen_ejecutivo si ya viene plano
+    2. informe_cliente.resumen_ejecutivo.vision_general
+    3. informe_cliente.informe_detallado.conclusion_profesional
+    """
+    if isinstance(resumen, dict) and resumen.get("resumen_ejecutivo"):
+        return resumen["resumen_ejecutivo"]
+
+    if not isinstance(salida, dict):
+        return "El análisis fue completado correctamente."
+
+    informe_cliente = salida.get("informe_cliente", {}) or {}
+    resumen_cliente = informe_cliente.get("resumen_ejecutivo", {}) or {}
+    informe_detallado = informe_cliente.get("informe_detallado", {}) or {}
+
+    return (
+        resumen_cliente.get("vision_general")
+        or informe_detallado.get("conclusion_profesional")
+        or "El análisis fue completado correctamente."
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     """
@@ -187,6 +248,10 @@ async def analizar(request: Request, archivo: UploadFile = File(...)):
                 """
             )
 
+        tipo_contrato = obtener_tipo_contrato(salida, resumen)
+        cantidad_riesgos = obtener_cantidad_riesgos(salida, resumen)
+        interpretacion_ejecutiva = obtener_resumen_ejecutivo(salida, resumen)
+
         return templates.TemplateResponse(
             request=request,
             name="resultado.html",
@@ -195,6 +260,9 @@ async def analizar(request: Request, archivo: UploadFile = File(...)):
                 "resumen": resumen,
                 "json_nombre": json_nombre,
                 "word_nombre": word_nombre,
+                "tipo_contrato": tipo_contrato,
+                "cantidad_riesgos": cantidad_riesgos,
+                "interpretacion_ejecutiva": interpretacion_ejecutiva,
             }
         )
 
