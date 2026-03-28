@@ -12,8 +12,10 @@ Permite:
 - descargar JSON y Word
 """
 
+import html
 import os
 import shutil
+import traceback
 from pathlib import Path
 
 from fastapi import FastAPI, UploadFile, File, Request, HTTPException
@@ -22,27 +24,129 @@ from fastapi.templating import Jinja2Templates
 
 from services.pipeline_demo import procesar_contrato_desde_archivo
 
+
 app = FastAPI(title="Analizador Contractual IA")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = BASE_DIR / "demo_web" / "templates"
 TEMP_UPLOADS_DIR = BASE_DIR / "temp_uploads"
+OUTPUT_DIR = BASE_DIR / "output"
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 os.makedirs(TEMP_UPLOADS_DIR, exist_ok=True)
-os.makedirs(BASE_DIR / "output", exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+
+def html_debug_page(titulo: str, contenido: str) -> HTMLResponse:
+    """
+    Genera una página HTML simple para mostrar diagnósticos o errores
+    sin depender de templates.
+    """
+    return HTMLResponse(
+        f"""
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="utf-8">
+            <title>{html.escape(titulo)}</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    max-width: 980px;
+                    margin: 40px auto;
+                    padding: 0 20px;
+                    color: #222;
+                    line-height: 1.5;
+                }}
+                h1 {{
+                    color: #1f3b5c;
+                }}
+                .box {{
+                    border: 1px solid #ddd;
+                    border-radius: 8px;
+                    padding: 16px;
+                    background: #fafafa;
+                    margin-top: 20px;
+                }}
+                pre {{
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                    background: #111;
+                    color: #f5f5f5;
+                    padding: 12px;
+                    border-radius: 6px;
+                    overflow-x: auto;
+                }}
+                code {{
+                    background: #f0f0f0;
+                    padding: 2px 4px;
+                    border-radius: 4px;
+                }}
+            </style>
+        </head>
+        <body>
+            <h1>{html.escape(titulo)}</h1>
+            <div class="box">
+                {contenido}
+            </div>
+        </body>
+        </html>
+        """
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     """
     Pantalla inicial de la demo web.
+
+    Si hay un problema con templates en Render, en lugar de devolver
+    un 500 genérico, muestra una página de diagnóstico útil.
     """
-    return templates.TemplateResponse(
-        "index.html",
-        {"request": request}
-    )
+    try:
+        existe_templates = TEMPLATES_DIR.exists()
+        existe_index = (TEMPLATES_DIR / "index.html").exists()
+        existe_resultado = (TEMPLATES_DIR / "resultado.html").exists()
+
+        if not existe_templates or not existe_index:
+            return html_debug_page(
+                "Diagnóstico de la demo web",
+                f"""
+                <p>No fue posible mostrar la pantalla inicial porque faltan archivos de plantilla.</p>
+                <ul>
+                    <li><b>BASE_DIR:</b> <code>{html.escape(str(BASE_DIR))}</code></li>
+                    <li><b>TEMPLATES_DIR:</b> <code>{html.escape(str(TEMPLATES_DIR))}</code></li>
+                    <li><b>Existe carpeta templates:</b> {existe_templates}</li>
+                    <li><b>Existe index.html:</b> {existe_index}</li>
+                    <li><b>Existe resultado.html:</b> {existe_resultado}</li>
+                </ul>
+                <p>Si esto aparece en Render, el problema está en la ruta efectiva del servidor o en el deploy del contenido estático.</p>
+                """
+            )
+
+        return templates.TemplateResponse(
+            "index.html",
+            {"request": request}
+        )
+
+    except Exception as e:
+        return html_debug_page(
+            "Error cargando la demo web",
+            f"""
+            <p>La ruta <code>/</code> falló al renderizar <code>index.html</code>.</p>
+            <ul>
+                <li><b>BASE_DIR:</b> <code>{html.escape(str(BASE_DIR))}</code></li>
+                <li><b>TEMPLATES_DIR:</b> <code>{html.escape(str(TEMPLATES_DIR))}</code></li>
+                <li><b>Existe carpeta templates:</b> {TEMPLATES_DIR.exists()}</li>
+                <li><b>Existe index.html:</b> {(TEMPLATES_DIR / "index.html").exists()}</li>
+                <li><b>Existe resultado.html:</b> {(TEMPLATES_DIR / "resultado.html").exists()}</li>
+                <li><b>Error:</b> <code>{html.escape(str(e))}</code></li>
+            </ul>
+            <h3>Traceback</h3>
+            <pre>{html.escape(traceback.format_exc())}</pre>
+            """
+        )
 
 
 @app.post("/analizar", response_class=HTMLResponse)
@@ -63,25 +167,61 @@ async def analizar(request: Request, archivo: UploadFile = File(...)):
 
     try:
         salida = procesar_contrato_desde_archivo(str(ruta_temporal))
+        resumen = salida["resumen"]
+
+        json_nombre = os.path.basename(salida["ruta_json_output"])
+        word_nombre = os.path.basename(salida["ruta_word_output"])
+
+        # Si falta la plantilla resultado.html, mostramos algo útil en HTML.
+        if not (TEMPLATES_DIR / "resultado.html").exists():
+            return html_debug_page(
+                "Análisis completado, pero falta la plantilla de resultado",
+                f"""
+                <p>El pipeline terminó, pero no se pudo renderizar <code>resultado.html</code>.</p>
+                <ul>
+                    <li><b>Vertical:</b> {html.escape(str(salida.get("vertical", "")))}</li>
+                    <li><b>JSON:</b> <code>{html.escape(json_nombre)}</code></li>
+                    <li><b>Word:</b> <code>{html.escape(word_nombre)}</code></li>
+                </ul>
+                <h3>Resumen</h3>
+                <pre>{html.escape(str(resumen))}</pre>
+                """
+            )
+
+        return templates.TemplateResponse(
+            "resultado.html",
+            {
+                "request": request,
+                "vertical": salida["vertical"],
+                "resumen": resumen,
+                "json_nombre": json_nombre,
+                "word_nombre": word_nombre,
+            }
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        return html_debug_page(
+            "Error durante el análisis del contrato",
+            f"""
+            <p>La carga del archivo funcionó, pero el pipeline lanzó un error.</p>
+            <ul>
+                <li><b>Archivo recibido:</b> <code>{html.escape(nombre_seguro)}</code></li>
+                <li><b>Ruta temporal:</b> <code>{html.escape(str(ruta_temporal))}</code></li>
+                <li><b>TEMPLATES_DIR:</b> <code>{html.escape(str(TEMPLATES_DIR))}</code></li>
+                <li><b>OUTPUT_DIR:</b> <code>{html.escape(str(OUTPUT_DIR))}</code></li>
+                <li><b>Error:</b> <code>{html.escape(str(e))}</code></li>
+            </ul>
+            <h3>Traceback</h3>
+            <pre>{html.escape(traceback.format_exc())}</pre>
+            """
+        )
+
     finally:
         if ruta_temporal.exists():
             ruta_temporal.unlink(missing_ok=True)
-
-    resumen = salida["resumen"]
-
-    json_nombre = os.path.basename(salida["ruta_json_output"])
-    word_nombre = os.path.basename(salida["ruta_word_output"])
-
-    return templates.TemplateResponse(
-        "resultado.html",
-        {
-            "request": request,
-            "vertical": salida["vertical"],
-            "resumen": resumen,
-            "json_nombre": json_nombre,
-            "word_nombre": word_nombre,
-        }
-    )
 
 
 @app.get("/descargar/json/{nombre_archivo}")
@@ -89,7 +229,7 @@ def descargar_json(nombre_archivo: str):
     """
     Descarga el JSON final generado.
     """
-    ruta = BASE_DIR / "output" / nombre_archivo
+    ruta = OUTPUT_DIR / nombre_archivo
 
     if not ruta.exists():
         raise HTTPException(status_code=404, detail="Archivo JSON no encontrado.")
@@ -106,7 +246,7 @@ def descargar_word(nombre_archivo: str):
     """
     Descarga el Word final generado.
     """
-    ruta = BASE_DIR / "output" / nombre_archivo
+    ruta = OUTPUT_DIR / nombre_archivo
 
     if not ruta.exists():
         raise HTTPException(status_code=404, detail="Archivo Word no encontrado.")
