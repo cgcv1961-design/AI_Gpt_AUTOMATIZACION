@@ -148,6 +148,18 @@ def obtener_nivel_riesgo(data: dict, resumen: dict) -> str:
     return scoring.get("nivel_riesgo") or resumen.get("nivel_riesgo") or "-"
 
 
+def interpretar_score(score: float) -> str:
+    """
+    Traduce el score a una lectura rápida orientada a cliente.
+    """
+    if score < 30:
+        return "Riesgo bajo: el contrato presenta una exposición relativamente contenida."
+    elif score < 70:
+        return "Riesgo medio: existen cláusulas que requieren revisión antes de firmar."
+    else:
+        return "Riesgo alto: el contrato puede resultar desfavorable y exige revisión cuidadosa."
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     try:
@@ -231,6 +243,7 @@ async def analizar(request: Request, archivo: UploadFile = File(...)):
         interpretacion_ejecutiva = obtener_interpretacion_ejecutiva(data, resumen)
         score_total = obtener_score_total(data, resumen)
         nivel_riesgo = obtener_nivel_riesgo(data, resumen)
+        interpretacion_score = interpretar_score(score_total)
 
         return templates.TemplateResponse(
             request=request,
@@ -244,6 +257,7 @@ async def analizar(request: Request, archivo: UploadFile = File(...)):
                 "interpretacion_ejecutiva": interpretacion_ejecutiva,
                 "score_total": score_total,
                 "nivel_riesgo": nivel_riesgo,
+                "interpretacion_score": interpretacion_score,
             }
         )
 
