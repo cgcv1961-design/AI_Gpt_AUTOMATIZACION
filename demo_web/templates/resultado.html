@@ -2,69 +2,286 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Resultado del análisis</title>
-
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 760px;
-            margin: 40px auto;
-            padding: 20px;
+        :root {
+            --bg: #f4f7fb;
+            --card: #ffffff;
+            --text: #14213d;
+            --muted: #5c677d;
+            --primary: #1d4ed8;
+            --primary-hover: #1e40af;
+            --border: #d9e2f1;
+            --shadow: 0 12px 30px rgba(20, 33, 61, 0.10);
+            --radius: 18px;
+            --risk-low: #15803d;
+            --risk-medium: #b45309;
+            --risk-high: #b91c1c;
         }
 
-        .box {
-            border: 1px solid #ccc;
-            padding: 24px;
-            border-radius: 10px;
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: linear-gradient(180deg, #f4f7fb 0%, #eef3fa 100%);
+            color: var(--text);
+        }
+
+        .wrapper {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 32px 20px;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 960px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .header {
+            padding: 32px;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
+        }
+
+        .eyebrow {
+            display: inline-block;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--primary);
+            background: #e8f0ff;
+            padding: 8px 12px;
+            border-radius: 999px;
+            margin-bottom: 14px;
         }
 
         h1 {
-            margin-top: 0;
+            margin: 0;
+            font-size: 42px;
+            line-height: 1.1;
         }
 
-        .dato {
-            margin-bottom: 10px;
+        .content {
+            padding: 30px 32px 36px;
         }
 
-        .acciones a {
+        .summary-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+
+        .panel {
+            background: #fbfdff;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 22px;
+        }
+
+        .panel h2 {
+            margin: 0 0 16px;
+            font-size: 22px;
+        }
+
+        .row {
+            margin-bottom: 12px;
+            font-size: 17px;
+            line-height: 1.5;
+        }
+
+        .row strong {
+            color: var(--text);
+        }
+
+        .score-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .score-number {
+            font-size: 54px;
+            font-weight: 800;
+            line-height: 1;
+            color: var(--primary);
+        }
+
+        .score-label {
+            font-size: 16px;
+            color: var(--muted);
+        }
+
+        .risk-badge {
             display: inline-block;
-            margin-right: 12px;
-            margin-top: 14px;
-            padding: 10px 16px;
-            border: 1px solid #999;
-            text-decoration: none;
-            border-radius: 8px;
-            color: black;
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
         }
 
-        .acciones a:hover {
-            background: #f0f0f0;
+        .risk-bajo {
+            background: #e9f8ee;
+            color: var(--risk-low);
+        }
+
+        .risk-medio {
+            background: #fff4e5;
+            color: var(--risk-medium);
+        }
+
+        .risk-alto {
+            background: #fdecec;
+            color: var(--risk-high);
+        }
+
+        .resumen-box {
+            background: #fbfdff;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 22px;
+            margin-bottom: 24px;
+        }
+
+        .resumen-box h2 {
+            margin: 0 0 14px;
+            font-size: 22px;
+        }
+
+        .resumen-text {
+            font-size: 16px;
+            line-height: 1.7;
+            color: var(--text);
+            white-space: pre-wrap;
+        }
+
+        .actions {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-block;
+            text-decoration: none;
+            border-radius: 12px;
+            padding: 14px 20px;
+            font-size: 15px;
+            font-weight: 700;
+            transition: background 0.2s ease, transform 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: #f7faff;
+            transform: translateY(-1px);
+        }
+
+        @media (max-width: 760px) {
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header,
+            .content {
+                padding-left: 22px;
+                padding-right: 22px;
+            }
+
+            h1 {
+                font-size: 32px;
+            }
+
+            .score-number {
+                font-size: 44px;
+            }
         }
     </style>
 </head>
-
 <body>
+    {% set riesgo = resumen.nivel_riesgo | lower %}
+    <div class="wrapper">
+        <div class="card">
+            <div class="header">
+                <div class="eyebrow">Resultado del análisis</div>
+                <h1>Evaluación contractual completada</h1>
+            </div>
 
-<div class="box">
+            <div class="content">
+                <div class="summary-grid">
+                    <div class="panel">
+                        <h2>Resumen general</h2>
 
-    <h1>Resultado del análisis</h1>
+                        <div class="row">
+                            <strong>Vertical detectada:</strong> {{ vertical | upper }}
+                        </div>
 
-    <div class="dato"><strong>Vertical detectada:</strong> {{ vertical }}</div>
-    <div class="dato"><strong>Tipo de contrato:</strong> {{ resumen.tipo_contrato }}</div>
-    <div class="dato"><strong>Score total:</strong> {{ resumen.score_total }} / 100</div>
-    <div class="dato">
-        <em>El score resume cuantitativamente el nivel de riesgo detectado.</em>
+                        <div class="row">
+                            <strong>Tipo de contrato:</strong> {{ resumen.tipo_contrato }}
+                        </div>
+
+                        <div class="row">
+                            <strong>Nivel de riesgo:</strong>
+                            <span class="risk-badge risk-{{ riesgo }}">{{ resumen.nivel_riesgo }}</span>
+                        </div>
+
+                        <div class="row">
+                            <strong>Cantidad de riesgos:</strong> {{ resumen.cantidad_riesgos }}
+                        </div>
+                    </div>
+
+                    <div class="panel score-card">
+                        <div class="score-number">{{ resumen.score_total | int }}</div>
+                        <div class="score-label">Score total / 100</div>
+                        <div class="score-label">El score resume cuantitativamente el nivel de riesgo detectado.</div>
+                    </div>
+                </div>
+
+                <div class="resumen-box">
+                    <h2>Interpretación ejecutiva</h2>
+                    <div class="resumen-text">
+                        {{ resumen.resumen_ejecutivo if resumen.resumen_ejecutivo is defined else "El análisis fue completado correctamente." }}
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <a class="btn btn-primary" href="/descargar/json/{{ json_nombre }}">Descargar JSON</a>
+                    <a class="btn btn-primary" href="/descargar/word/{{ word_nombre }}">Descargar Word</a>
+                    <a class="btn btn-secondary" href="/">Analizar otro contrato</a>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="dato"><strong>Nivel de riesgo:</strong> {{ resumen.nivel_riesgo }}</div>
-    <div class="dato"><strong>Cantidad de riesgos:</strong> {{ resumen.cantidad_riesgos }}</div>
-
-    <div class="acciones">
-        <a href="/descargar/json/{{ json_nombre }}">Descargar JSON</a>
-        <a href="/descargar/word/{{ word_nombre }}">Descargar Word</a>
-        <a href="/">Analizar otro contrato</a>
-    </div>
-
-</div>
-
 </body>
 </html>
