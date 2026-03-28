@@ -126,8 +126,9 @@ def home(request: Request):
             )
 
         return templates.TemplateResponse(
-            "index.html",
-            {"request": request}
+            request=request,
+            name="index.html",
+            context={}
         )
 
     except Exception as e:
@@ -155,7 +156,6 @@ async def analizar(request: Request, archivo: UploadFile = File(...)):
     Recibe el archivo subido, ejecuta el pipeline
     y muestra el resultado resumido.
     """
-
     if not archivo.filename:
         raise HTTPException(status_code=400, detail="No se recibió archivo.")
 
@@ -172,7 +172,6 @@ async def analizar(request: Request, archivo: UploadFile = File(...)):
         json_nombre = os.path.basename(salida["ruta_json_output"])
         word_nombre = os.path.basename(salida["ruta_word_output"])
 
-        # Si falta la plantilla resultado.html, mostramos algo útil en HTML.
         if not (TEMPLATES_DIR / "resultado.html").exists():
             return html_debug_page(
                 "Análisis completado, pero falta la plantilla de resultado",
@@ -189,9 +188,9 @@ async def analizar(request: Request, archivo: UploadFile = File(...)):
             )
 
         return templates.TemplateResponse(
-            "resultado.html",
-            {
-                "request": request,
+            request=request,
+            name="resultado.html",
+            context={
                 "vertical": salida["vertical"],
                 "resumen": resumen,
                 "json_nombre": json_nombre,
