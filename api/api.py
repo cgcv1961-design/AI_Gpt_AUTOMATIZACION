@@ -13,6 +13,7 @@ Permite:
 """
 
 import html
+import json
 import os
 import shutil
 import traceback
@@ -39,10 +40,6 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 def html_debug_page(titulo: str, contenido: str) -> HTMLResponse:
-    """
-    Genera una página HTML simple para mostrar diagnósticos o errores
-    sin depender de templates.
-    """
     return HTMLResponse(
         f"""
         <!DOCTYPE html>
@@ -96,16 +93,20 @@ def html_debug_page(titulo: str, contenido: str) -> HTMLResponse:
     )
 
 
-def obtener_tipo_contrato(salida: dict, resumen: dict) -> str:
+def cargar_json_generado(ruta_json_output: str) -> dict:
     """
-    Obtiene el tipo de contrato priorizando el JSON estructurado.
-    Funciona tanto para GENERAL como para AUDIOVISUAL.
+    Lee el JSON final generado por el pipeline y lo devuelve como dict.
+    Si falla, devuelve {} para no romper la UI.
     """
-    if not isinstance(salida, dict):
-        return "-"
+    try:
+        with open(ruta_json_output, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
-    nucleo = salida.get("nucleo_contractual", {}) or {}
 
+def obtener_tipo_contrato(data: dict, resumen: dict) -> str:
+    nucleo = data.get("nucleo_contractual", {}) or {}
     return (
         nucleo.get("tipo_contrato")
         or resumen.get("tipo_contrato")
@@ -113,15 +114,8 @@ def obtener_tipo_contrato(salida: dict, resumen: dict) -> str:
     )
 
 
-def obtener_cantidad_riesgos(salida: dict, resumen: dict) -> int:
-    """
-    Obtiene cantidad de riesgos desde scoring si existe.
-    Si no, usa el resumen recibido.
-    """
-    if not isinstance(salida, dict):
-        return resumen.get("cantidad_riesgos", 0)
-
-    scoring = salida.get("scoring", {}) or {}
+def obtener_cantidad_riesgos(data: dict, resumen: dict) -> int:
+    scoring = data.get("scoring", {}) or {}
     metricas = scoring.get("metricas", {}) or {}
 
     return (
@@ -131,40 +125,31 @@ def obtener_cantidad_riesgos(salida: dict, resumen: dict) -> int:
     )
 
 
-def obtener_resumen_ejecutivo(salida: dict, resumen: dict) -> str:
-    """
-    Arma una interpretación ejecutiva útil para la UI.
-
-    Prioridades:
-    1. resumen.resumen_ejecutivo si ya viene plano
-    2. informe_cliente.resumen_ejecutivo.vision_general
-    3. informe_cliente.informe_detallado.conclusion_profesional
-    """
-    if isinstance(resumen, dict) and resumen.get("resumen_ejecutivo"):
-        return resumen["resumen_ejecutivo"]
-
-    if not isinstance(salida, dict):
-        return "El análisis fue completado correctamente."
-
-    informe_cliente = salida.get("informe_cliente", {}) or {}
-    resumen_cliente = informe_cliente.get("resumen_ejecutivo", {}) or {}
+def obtener_interpretacion_ejecutiva(data: dict, resumen: dict) -> str:
+    informe_cliente = data.get("informe_cliente", {}) or {}
+    resumen_ejecutivo = informe_cliente.get("resumen_ejecutivo", {}) or {}
     informe_detallado = informe_cliente.get("informe_detallado", {}) or {}
 
     return (
-        resumen_cliente.get("vision_general")
+        resumen.get("resumen_ejecutivo")
+        or resumen_ejecutivo.get("vision_general")
         or informe_detallado.get("conclusion_profesional")
         or "El análisis fue completado correctamente."
     )
 
 
+def obtener_score_total(data: dict, resumen: dict) -> float:
+    scoring = data.get("scoring", {}) or {}
+    return scoring.get("score_total") or resumen.get("score_total") or 0
+
+
+def obtener_nivel_riesgo(data: dict, resumen: dict) -> str:
+    scoring = data.get("scoring", {}) or {}
+    return scoring.get("nivel_riesgo") or resumen.get("nivel_riesgo") or "-"
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
-    """
-    Pantalla inicial de la demo web.
-
-    Si hay un problema con templates en Render, en lugar de devolver
-    un 500 genérico, muestra una página de diagnóstico útil.
-    """
     try:
         existe_templates = TEMPLATES_DIR.exists()
         existe_index = (TEMPLATES_DIR / "index.html").exists()
@@ -182,7 +167,6 @@ def home(request: Request):
                     <li><b>Existe index.html:</b> {existe_index}</li>
                     <li><b>Existe resultado.html:</b> {existe_resultado}</li>
                 </ul>
-                <p>Si esto aparece en Render, el problema está en la ruta efectiva del servidor o en el deploy del contenido estático.</p>
                 """
             )
 
@@ -200,9 +184,6 @@ def home(request: Request):
             <ul>
                 <li><b>BASE_DIR:</b> <code>{html.escape(str(BASE_DIR))}</code></li>
                 <li><b>TEMPLATES_DIR:</b> <code>{html.escape(str(TEMPLATES_DIR))}</code></li>
-                <li><b>Existe carpeta templates:</b> {TEMPLATES_DIR.exists()}</li>
-                <li><b>Existe index.html:</b> {(TEMPLATES_DIR / "index.html").exists()}</li>
-                <li><b>Existe resultado.html:</b> {(TEMPLATES_DIR / "resultado.html").exists()}</li>
                 <li><b>Error:</b> <code>{html.escape(str(e))}</code></li>
             </ul>
             <h3>Traceback</h3>
@@ -213,10 +194,6 @@ def home(request: Request):
 
 @app.post("/analizar", response_class=HTMLResponse)
 async def analizar(request: Request, archivo: UploadFile = File(...)):
-    """
-    Recibe el archivo subido, ejecuta el pipeline
-    y muestra el resultado resumido.
-    """
     if not archivo.filename:
         raise HTTPException(status_code=400, detail="No se recibió archivo.")
 
@@ -228,7 +205,7 @@ async def analizar(request: Request, archivo: UploadFile = File(...)):
 
     try:
         salida = procesar_contrato_desde_archivo(str(ruta_temporal))
-        resumen = salida["resumen"]
+        resumen = salida.get("resumen", {}) or {}
 
         json_nombre = os.path.basename(salida["ruta_json_output"])
         word_nombre = os.path.basename(salida["ruta_word_output"])
@@ -243,26 +220,30 @@ async def analizar(request: Request, archivo: UploadFile = File(...)):
                     <li><b>JSON:</b> <code>{html.escape(json_nombre)}</code></li>
                     <li><b>Word:</b> <code>{html.escape(word_nombre)}</code></li>
                 </ul>
-                <h3>Resumen</h3>
-                <pre>{html.escape(str(resumen))}</pre>
                 """
             )
 
-        tipo_contrato = obtener_tipo_contrato(salida, resumen)
-        cantidad_riesgos = obtener_cantidad_riesgos(salida, resumen)
-        interpretacion_ejecutiva = obtener_resumen_ejecutivo(salida, resumen)
+        # Fuente de verdad para la UI: el JSON final generado
+        data = cargar_json_generado(salida["ruta_json_output"])
+
+        tipo_contrato = obtener_tipo_contrato(data, resumen)
+        cantidad_riesgos = obtener_cantidad_riesgos(data, resumen)
+        interpretacion_ejecutiva = obtener_interpretacion_ejecutiva(data, resumen)
+        score_total = obtener_score_total(data, resumen)
+        nivel_riesgo = obtener_nivel_riesgo(data, resumen)
 
         return templates.TemplateResponse(
             request=request,
             name="resultado.html",
             context={
-                "vertical": salida["vertical"],
-                "resumen": resumen,
+                "vertical": salida.get("vertical", "-"),
                 "json_nombre": json_nombre,
                 "word_nombre": word_nombre,
                 "tipo_contrato": tipo_contrato,
                 "cantidad_riesgos": cantidad_riesgos,
                 "interpretacion_ejecutiva": interpretacion_ejecutiva,
+                "score_total": score_total,
+                "nivel_riesgo": nivel_riesgo,
             }
         )
 
@@ -277,7 +258,6 @@ async def analizar(request: Request, archivo: UploadFile = File(...)):
             <ul>
                 <li><b>Archivo recibido:</b> <code>{html.escape(nombre_seguro)}</code></li>
                 <li><b>Ruta temporal:</b> <code>{html.escape(str(ruta_temporal))}</code></li>
-                <li><b>TEMPLATES_DIR:</b> <code>{html.escape(str(TEMPLATES_DIR))}</code></li>
                 <li><b>OUTPUT_DIR:</b> <code>{html.escape(str(OUTPUT_DIR))}</code></li>
                 <li><b>Error:</b> <code>{html.escape(str(e))}</code></li>
             </ul>
@@ -293,9 +273,6 @@ async def analizar(request: Request, archivo: UploadFile = File(...)):
 
 @app.get("/descargar/json/{nombre_archivo}")
 def descargar_json(nombre_archivo: str):
-    """
-    Descarga el JSON final generado.
-    """
     ruta = OUTPUT_DIR / nombre_archivo
 
     if not ruta.exists():
@@ -310,9 +287,6 @@ def descargar_json(nombre_archivo: str):
 
 @app.get("/descargar/word/{nombre_archivo}")
 def descargar_word(nombre_archivo: str):
-    """
-    Descarga el Word final generado.
-    """
     ruta = OUTPUT_DIR / nombre_archivo
 
     if not ruta.exists():

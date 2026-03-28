@@ -17,9 +17,7 @@
             --radius: 18px;
         }
 
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
 
         body {
             margin: 0;
@@ -152,12 +150,18 @@
             cursor: pointer;
             background: var(--primary);
             color: white;
-            transition: background 0.2s ease, transform 0.2s ease;
+            transition: background 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
         }
 
         .btn:hover {
             background: var(--primary-hover);
             transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+            transform: none;
         }
 
         .note {
@@ -173,17 +177,69 @@
             font-size: 13px;
         }
 
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(20, 33, 61, 0.55);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 20px;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .loading-card {
+            width: 100%;
+            max-width: 460px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+            padding: 32px 28px;
+            text-align: center;
+        }
+
+        .spinner {
+            width: 58px;
+            height: 58px;
+            margin: 0 auto 18px;
+            border: 6px solid #dbe7fb;
+            border-top: 6px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .loading-title {
+            margin: 0 0 10px;
+            font-size: 26px;
+            color: var(--text);
+        }
+
+        .loading-text {
+            margin: 0;
+            font-size: 16px;
+            color: var(--muted);
+            min-height: 24px;
+        }
+
+        .loading-subtext {
+            margin-top: 14px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         @media (max-width: 760px) {
-            h1 {
-                font-size: 34px;
-            }
-
-            .feature-list {
-                grid-template-columns: 1fr;
-            }
-
-            .hero,
-            .content {
+            h1 { font-size: 34px; }
+            .feature-list { grid-template-columns: 1fr; }
+            .hero, .content {
                 padding-left: 22px;
                 padding-right: 22px;
             }
@@ -218,16 +274,16 @@
                     </div>
                 </div>
 
-                <form action="/analizar" method="post" enctype="multipart/form-data" class="upload-box">
+                <form id="analysisForm" action="/analizar" method="post" enctype="multipart/form-data" class="upload-box">
                     <h2>Subir contrato</h2>
                     <p>Formatos recomendados: TXT, DOCX, ODT y PDF.</p>
 
                     <div class="file-input">
-                        <input type="file" name="archivo" required>
+                        <input id="archivoInput" type="file" name="archivo" required>
                     </div>
 
                     <div class="actions">
-                        <button type="submit" class="btn">Analizar contrato</button>
+                        <button id="submitBtn" type="submit" class="btn">Analizar contrato</button>
                     </div>
 
                     <div class="note">
@@ -241,5 +297,70 @@
             </div>
         </div>
     </div>
+
+    <div id="loadingOverlay" class="loading-overlay" aria-hidden="true">
+        <div class="loading-card">
+            <div class="spinner"></div>
+            <h2 class="loading-title">Analizando contrato</h2>
+            <p id="loadingText" class="loading-text">Procesando documento...</p>
+            <div class="loading-subtext">
+                Esto puede tardar unos segundos. Por favor, no cierres esta ventana.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById("analysisForm");
+        const fileInput = document.getElementById("archivoInput");
+        const submitBtn = document.getElementById("submitBtn");
+        const overlay = document.getElementById("loadingOverlay");
+        const loadingText = document.getElementById("loadingText");
+
+        const mensajes = [
+            "Procesando documento...",
+            "Extrayendo contenido contractual...",
+            "Ejecutando análisis con IA...",
+            "Calculando scoring determinista...",
+            "Generando resultado final..."
+        ];
+
+        let mensajeIndex = 0;
+        let intervalId = null;
+
+        function iniciarMensajes() {
+            loadingText.textContent = mensajes[0];
+            intervalId = setInterval(() => {
+                mensajeIndex = (mensajeIndex + 1) % mensajes.length;
+                loadingText.textContent = mensajes[mensajeIndex];
+            }, 1800);
+        }
+
+        form.addEventListener("submit", function () {
+            if (!fileInput.files || fileInput.files.length === 0) {
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = "Analizando...";
+            overlay.classList.add("active");
+            overlay.setAttribute("aria-hidden", "false");
+            iniciarMensajes();
+        });
+
+        window.addEventListener("pageshow", function () {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Analizar contrato";
+            overlay.classList.remove("active");
+            overlay.setAttribute("aria-hidden", "true");
+
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+            }
+
+            mensajeIndex = 0;
+            loadingText.textContent = "Procesando documento...";
+        });
+    </script>
 </body>
 </html>
