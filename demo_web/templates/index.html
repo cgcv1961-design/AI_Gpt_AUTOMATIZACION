@@ -15,6 +15,10 @@
             --border: #d9e2f1;
             --shadow: 0 12px 30px rgba(20, 33, 61, 0.10);
             --radius: 18px;
+            --info-bg: #eef4ff;
+            --info-border: #cfe0ff;
+            --info-text: #1d4ed8;
+            --soft-note-bg: #f8fbff;
         }
 
         * { box-sizing: border-box; }
@@ -77,6 +81,21 @@
             max-width: 680px;
         }
 
+        .status-banner {
+            margin-top: 18px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: var(--info-bg);
+            border: 1px solid var(--info-border);
+            color: var(--info-text);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .status-banner strong {
+            color: #143b8f;
+        }
+
         .content {
             padding: 30px 36px 36px;
         }
@@ -126,6 +145,22 @@
             font-size: 15px;
         }
 
+        .version-note {
+            margin: 0 0 18px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: var(--soft-note-bg);
+            border: 1px solid var(--border);
+            text-align: left;
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.55;
+        }
+
+        .version-note strong {
+            color: var(--text);
+        }
+
         .file-input {
             display: inline-block;
             margin-bottom: 18px;
@@ -168,6 +203,7 @@
             margin-top: 16px;
             font-size: 13px;
             color: var(--muted);
+            line-height: 1.5;
         }
 
         .footer {
@@ -175,6 +211,7 @@
             text-align: center;
             color: var(--muted);
             font-size: 13px;
+            line-height: 1.5;
         }
 
         .loading-overlay {
@@ -256,6 +293,12 @@
                     Subí un contrato y obtené una evaluación estructurada con detección de riesgos,
                     score cuantitativo, resumen ejecutivo y descarga de resultados en JSON y Word.
                 </p>
+
+                <div class="status-banner">
+                    <strong>Capacidad actual:</strong> el sistema puede interpretar contratos en distintos idiomas.
+                    <strong>Salida actual:</strong> español.
+                    <strong>Próxima versión:</strong> selección de idioma de salida.
+                </div>
             </div>
 
             <div class="content">
@@ -278,6 +321,11 @@
                     <h2>Subir contrato</h2>
                     <p>Formatos recomendados: TXT, DOCX, ODT y PDF.</p>
 
+                    <div class="version-note">
+                        <strong>Versión actual:</strong> ingreso multiidioma con salida en español.<br>
+                        <strong>Hoja de ruta próxima:</strong> salida multiidioma configurable sin alterar la lógica de análisis.
+                    </div>
+
                     <div class="file-input">
                         <input id="archivoInput" type="file" name="archivo" required>
                     </div>
@@ -287,12 +335,14 @@
                     </div>
 
                     <div class="note">
-                        El análisis puede tardar unos segundos según el tamaño y complejidad del documento.
+                        El análisis puede tardar unos segundos según el tamaño y complejidad del documento.<br>
+                        Recomendado usar documentos de ejemplo o anonimizados.
                     </div>
                 </form>
 
                 <div class="footer">
-                    Demo profesional de análisis contractual con IA aplicada.
+                    Demo profesional de análisis contractual con IA aplicada.<br>
+                    Ingreso multiidioma activo · salida en español · evolución prevista a salida multiidioma.
                 </div>
             </div>
         </div>

@@ -228,6 +228,21 @@
             overflow: auto;
         }
 
+        .lang-note {
+            margin-bottom: 16px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: #f8fbff;
+            border: 1px solid var(--border);
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.55;
+        }
+
+        .lang-note strong {
+            color: var(--text);
+        }
+
         .actions {
             display: flex;
             gap: 12px;
@@ -274,6 +289,7 @@
             color: var(--muted);
             text-align: center;
             border-top: 1px solid #edf2fa;
+            line-height: 1.5;
         }
 
         @media (max-width: 900px) {
@@ -359,6 +375,12 @@
                     </div>
                 </div>
 
+                <div class="lang-note">
+                    <strong>Capacidad actual:</strong> el sistema puede interpretar contratos de ingreso en distintos idiomas.<br>
+                    <strong>Salida actual:</strong> español.<br>
+                    <strong>Próxima versión:</strong> selección de idioma de salida para JSON, Word y pantalla web.
+                </div>
+
                 <div class="actions">
                     <a class="btn btn-primary" href="/descargar/json/{{ json_nombre }}">Descargar JSON</a>
                     <a class="btn btn-primary" href="/descargar/word/{{ word_nombre }}">Descargar Word</a>
@@ -366,7 +388,8 @@
                 </div>
 
                 <div class="trust-line">
-                    Análisis generado con IA + scoring determinista auditable en Python.
+                    Análisis generado con IA + scoring determinista auditable en Python.<br>
+                    Ingreso multiidioma activo · salida actual en español · evolución prevista a salida multiidioma.
                 </div>
             </div>
         </div>
