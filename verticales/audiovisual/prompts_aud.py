@@ -24,26 +24,21 @@ CRITERIO ESPECIAL
 La severidad NO debe ser generada por el LLM.
 La severidad será calculada externamente por lógica determinística.
 
-VERSIÓN
--------
-Esta versión amplía la salida audiovisual para acercarla al nivel
-de riqueza analítica de la vertical GENERAL, incorporando:
+OBJETIVO DE ESTA VERSIÓN
+------------------------
+Mejorar:
+- claridad
+- concisión
+- utilidad comercial
+- legibilidad para prospectos no técnicos
 
-- resumen ejecutivo estructurado
-- puntos críticos
-- hallazgos principales
-- implicancias estratégicas
-- preguntas clave antes de firmar
-- conclusión profesional
-- nivel de confianza del análisis
-
-NOTA
-----
-El modelo debe devolver EXCLUSIVAMENTE JSON válido en español.
-No debe incluir texto fuera del JSON.
+Manteniendo:
+- estructura JSON
+- riqueza analítica
+- compatibilidad con el sistema actual
 """
 
-VERSION_PROMPT_AU = "3.0_audiovisual_json_rico_deterministico"
+VERSION_PROMPT_AU = "3.2_audiovisual_json_rico_claro"
 
 
 def construir_prompt_audiovisual(contrato: str) -> str:
@@ -88,6 +83,15 @@ IMPORTANTE
 6. El objetivo es producir un JSON suficientemente rico para que luego el Word
    salga exclusivamente de este JSON, sin reinterpretaciones paralelas.
 
+ESTILO DE SALIDA (OBLIGATORIO)
+------------------------------
+- Evitar repeticiones.
+- Usar frases claras y relativamente breves.
+- No sobre-explicar.
+- Cada sección debe aportar información distinta.
+- No repetir literalmente los mismos conceptos en resumen, hallazgos, recomendación y conclusión.
+- Priorizar utilidad práctica para toma de decisión.
+
 INSTRUCCIONES DE ANÁLISIS
 -------------------------
 Analiza especialmente:
@@ -112,30 +116,47 @@ Cada elemento dentro de "riesgos_sectoriales" debe contener EXACTAMENTE:
 NO incluir severidad.
 La severidad será calculada externamente.
 
-C) RESUMEN EJECUTIVO PARA CLIENTE
-Debe poder ser leído por un prospect o cliente no técnico.
-Debe ser claro, profesional y útil para tomar decisiones.
+C) RESUMEN EJECUTIVO
+- Máximo 3 frases.
+- Debe ser claro, profesional y útil para lectura rápida.
+- Debe incluir:
+  • idea central del contrato
+  • nivel de riesgo global
+  • 2 o 3 focos críticos si corresponde
+- No repetir literalmente toda la lista de puntos críticos.
 
 D) PUNTOS CRÍTICOS PRINCIPALES
-Lista breve de los puntos más delicados o negociables.
+- Lista breve.
+- Cada punto como frase corta.
+- Sin explicación adicional.
 
 E) HALLAZGOS PRINCIPALES
-Lista de observaciones relevantes que resumen el problema contractual.
+- Lista de observaciones relevantes.
+- Deben aportar información nueva.
+- No repetir exactamente los puntos críticos.
 
 F) IMPLICANCIAS ESTRATÉGICAS
-Consecuencias probables a mediano plazo si el contrato se firma sin cambios.
+- Consecuencias probables a mediano plazo.
+- Deben ser concretas, no abstractas.
 
 G) PREGUNTAS CLAVE ANTES DE FIRMAR
-Preguntas concretas que conviene resolver antes de firmar el contrato.
+- Preguntas concretas, útiles y accionables.
+- Deben servir para negociación o validación previa.
 
 H) CONCLUSIÓN PROFESIONAL
-Cierre técnico breve y claro.
+- Máximo 1 párrafo.
+- Debe cerrar el análisis con claridad.
+- No repetir todo lo anterior.
 
-I) NIVEL DE CONFIANZA DEL ANÁLISIS
+I) RECOMENDACIÓN PROFESIONAL
+- Máximo 1 párrafo corto.
+- Debe ser accionable.
+- No repetir todos los hallazgos.
+
+J) NIVEL DE CONFIANZA DEL ANÁLISIS
 Debe indicar:
 - general: alto | medio | bajo
 - fundamento: explicación breve de por qué el nivel de confianza es ese
-  (por ejemplo: texto claro, información incompleta, cláusulas ambiguas, etc.)
 
 FORMATO JSON EXACTO
 -------------------
@@ -180,12 +201,13 @@ FORMATO JSON EXACTO
 REGLAS ADICIONALES DE CALIDAD
 -----------------------------
 - "vision_general" debe ser breve, clara y profesional.
-- "nivel_riesgo_global" debe ser una formulación textual simple para cliente.
+- "nivel_riesgo_global" debe ser una formulación textual simple.
 - "puntos_criticos" debe ser una lista de frases cortas.
 - "hallazgos_principales" debe ser una lista de observaciones relevantes.
-- "implicancias_estrategicas_mediano_plazo" debe ser una lista concreta, no abstracta.
-- "preguntas_clave_antes_de_firmar" debe contener preguntas reales, útiles y accionables.
+- "implicancias_estrategicas_mediano_plazo" debe ser concreta.
+- "preguntas_clave_antes_de_firmar" debe contener preguntas reales y útiles.
 - "conclusion_profesional" debe ser una síntesis técnica final.
+- "recomendacion_profesional" debe ser corta, clara y accionable.
 - Si no hay precio claro, usar null en "precio_total".
 - Si no hay duración clara en meses, usar null en "duracion_meses".
 - Si el plazo está expresado de forma narrativa y eso aporta valor, completar también "duracion_texto".

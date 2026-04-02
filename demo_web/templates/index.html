@@ -40,7 +40,7 @@
 
         .card {
             width: 100%;
-            max-width: 820px;
+            max-width: 860px;
             background: var(--card);
             border: 1px solid var(--border);
             border-radius: var(--radius);
@@ -78,7 +78,7 @@
             font-size: 18px;
             line-height: 1.6;
             color: var(--muted);
-            max-width: 680px;
+            max-width: 700px;
         }
 
         .status-banner {
@@ -171,6 +171,58 @@
             max-width: 100%;
         }
 
+        .config-box {
+            margin: 0 auto 18px;
+            max-width: 620px;
+            text-align: left;
+            padding: 14px 16px;
+            background: #f8fbff;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+
+        .config-box + .config-box {
+            margin-top: 12px;
+        }
+
+        .config-title {
+            display: block;
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: var(--text);
+        }
+
+        .config-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px 20px;
+            margin-bottom: 8px;
+        }
+
+        .config-options label {
+            font-size: 14px;
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        .config-help {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .select-pais {
+            width: 100%;
+            max-width: 360px;
+            padding: 10px 12px;
+            font-size: 14px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: white;
+            color: var(--text);
+        }
+
         .actions {
             margin-top: 8px;
         }
@@ -230,42 +282,23 @@
         }
 
         .loading-card {
-            width: 100%;
-            max-width: 460px;
+            width: 140px;
+            height: 140px;
             background: white;
             border-radius: 20px;
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
-            padding: 32px 28px;
-            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .spinner {
             width: 58px;
             height: 58px;
-            margin: 0 auto 18px;
             border: 6px solid #dbe7fb;
             border-top: 6px solid var(--primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-        }
-
-        .loading-title {
-            margin: 0 0 10px;
-            font-size: 26px;
-            color: var(--text);
-        }
-
-        .loading-text {
-            margin: 0;
-            font-size: 16px;
-            color: var(--muted);
-            min-height: 24px;
-        }
-
-        .loading-subtext {
-            margin-top: 14px;
-            font-size: 13px;
-            color: var(--muted);
         }
 
         @keyframes spin {
@@ -274,11 +307,18 @@
         }
 
         @media (max-width: 760px) {
-            h1 { font-size: 34px; }
+            h1 { font-size: 24px; }
             .feature-list { grid-template-columns: 1fr; }
             .hero, .content {
                 padding-left: 22px;
                 padding-right: 22px;
+            }
+            .config-options {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .select-pais {
+                max-width: 100%;
             }
         }
     </style>
@@ -330,6 +370,42 @@
                         <input id="archivoInput" type="file" name="archivo" required>
                     </div>
 
+                    <div class="config-box">
+                        <label class="config-title">Perspectiva del análisis</label>
+
+                        <div class="config-options">
+                            <label>
+                                <input type="radio" name="perspectiva" value="1" checked>
+                                <strong>1.</strong> Parte receptora del contrato
+                            </label>
+
+                            <label>
+                                <input type="radio" name="perspectiva" value="2">
+                                <strong>2.</strong> Parte proponente del contrato
+                            </label>
+                        </div>
+
+                        <div class="config-help">
+                            Internamente el sistema usa esta elección para orientar el análisis, pero en el resultado se mostrará además el rol contractual detectado.
+                        </div>
+                    </div>
+
+                    <div class="config-box">
+                        <label class="config-title" for="pais_referencia">País / contexto legal de referencia</label>
+
+                        <select id="pais_referencia" name="pais_referencia" class="select-pais">
+                            <option value="1">Argentina</option>
+                            <option value="2">Uruguay</option>
+                            <option value="3">Italia</option>
+                            <option value="4">España</option>
+                            <option value="5" selected>Internacional / Otro</option>
+                        </select>
+
+                        <div class="config-help" style="margin-top: 8px;">
+                            Este dato se usa como contexto legal de referencia para interpretar mejor el contrato.
+                        </div>
+                    </div>
+
                     <div class="actions">
                         <button id="submitBtn" type="submit" class="btn">Analizar contrato</button>
                     </div>
@@ -342,7 +418,7 @@
 
                 <div class="footer">
                     Demo profesional de análisis contractual con IA aplicada.<br>
-                    Ingreso multiidioma activo · salida en español · evolución prevista a salida multiidioma.
+                    Perspectiva configurable · contexto legal de referencia · ingreso multiidioma activo.
                 </div>
             </div>
         </div>
@@ -351,11 +427,6 @@
     <div id="loadingOverlay" class="loading-overlay" aria-hidden="true">
         <div class="loading-card">
             <div class="spinner"></div>
-            <h2 class="loading-title">Analizando contrato</h2>
-            <p id="loadingText" class="loading-text">Procesando documento...</p>
-            <div class="loading-subtext">
-                Esto puede tardar unos segundos. Por favor, no cierres esta ventana.
-            </div>
         </div>
     </div>
 
@@ -364,26 +435,6 @@
         const fileInput = document.getElementById("archivoInput");
         const submitBtn = document.getElementById("submitBtn");
         const overlay = document.getElementById("loadingOverlay");
-        const loadingText = document.getElementById("loadingText");
-
-        const mensajes = [
-            "Procesando documento...",
-            "Extrayendo contenido contractual...",
-            "Ejecutando análisis con IA...",
-            "Calculando scoring determinista...",
-            "Generando resultado final..."
-        ];
-
-        let mensajeIndex = 0;
-        let intervalId = null;
-
-        function iniciarMensajes() {
-            loadingText.textContent = mensajes[0];
-            intervalId = setInterval(() => {
-                mensajeIndex = (mensajeIndex + 1) % mensajes.length;
-                loadingText.textContent = mensajes[mensajeIndex];
-            }, 1800);
-        }
 
         form.addEventListener("submit", function () {
             if (!fileInput.files || fileInput.files.length === 0) {
@@ -394,7 +445,6 @@
             submitBtn.textContent = "Analizando...";
             overlay.classList.add("active");
             overlay.setAttribute("aria-hidden", "false");
-            iniciarMensajes();
         });
 
         window.addEventListener("pageshow", function () {
@@ -402,14 +452,6 @@
             submitBtn.textContent = "Analizar contrato";
             overlay.classList.remove("active");
             overlay.setAttribute("aria-hidden", "true");
-
-            if (intervalId) {
-                clearInterval(intervalId);
-                intervalId = null;
-            }
-
-            mensajeIndex = 0;
-            loadingText.textContent = "Procesando documento...";
         });
     </script>
 </body>

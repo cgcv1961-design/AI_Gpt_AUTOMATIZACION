@@ -15,10 +15,13 @@
             --border: #d9e2f1;
             --shadow: 0 10px 24px rgba(20, 33, 61, 0.10);
             --radius: 16px;
+
             --risk-low: #15803d;
             --risk-low-bg: #e8f8ee;
+
             --risk-medium: #b45309;
             --risk-medium-bg: #fff4e5;
+
             --risk-high: #b91c1c;
             --risk-high-bg: #fdecec;
         }
@@ -99,12 +102,63 @@
         }
 
         .row {
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             font-size: 15px;
-            line-height: 1.35;
+            line-height: 1.42;
         }
 
         .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .info-box {
+            margin-top: 10px;
+            padding: 10px 12px;
+            background: #eef4ff;
+            border: 1px solid #d8e5ff;
+            border-radius: 10px;
+            font-size: 14px;
+            line-height: 1.45;
+        }
+
+        .clarity-box {
+            margin-bottom: 16px;
+            padding: 14px 16px;
+            background: #eef4ff;
+            border: 1px solid #d8e5ff;
+            border-radius: 12px;
+        }
+
+        .clarity-box h3 {
+            margin: 0 0 8px;
+            font-size: 16px;
+        }
+
+        .clarity-box p {
+            margin: 0 0 6px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .clarity-box p:last-child {
+            margin-bottom: 0;
+        }
+
+        .partes-box {
+            margin-top: 10px;
+            padding: 10px 12px;
+            background: #f8fbff;
+            border: 1px solid #dbe7fb;
+            border-radius: 10px;
+        }
+
+        .parte-linea {
+            margin-bottom: 6px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .parte-linea:last-child {
             margin-bottom: 0;
         }
 
@@ -139,7 +193,16 @@
             padding: 10px 12px;
         }
 
-        .score-bar-box { margin-top: 4px; }
+        .score-help {
+            margin-top: 8px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--muted);
+        }
+
+        .score-bar-box {
+            margin-top: 4px;
+        }
 
         .score-bar {
             width: 100%;
@@ -187,6 +250,12 @@
             border: 1px solid #f1d2a8;
         }
 
+        .risk-medio-alto {
+            background: #fff1e8;
+            color: #b45309;
+            border: 1px solid #f3c9a6;
+        }
+
         .risk-alto {
             background: var(--risk-high-bg);
             color: var(--risk-high);
@@ -224,8 +293,32 @@
             line-height: 1.55;
             color: var(--text);
             white-space: pre-wrap;
-            max-height: 150px;
+            max-height: 260px;
             overflow: auto;
+        }
+
+        .mini-guide {
+            margin-bottom: 16px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            background: #f8fbff;
+            border: 1px solid var(--border);
+        }
+
+        .mini-guide h3 {
+            margin: 0 0 8px;
+            font-size: 16px;
+        }
+
+        .mini-guide p {
+            margin: 0 0 6px;
+            font-size: 14px;
+            line-height: 1.55;
+            color: var(--muted);
+        }
+
+        .mini-guide p:last-child {
+            margin-bottom: 0;
         }
 
         .lang-note {
@@ -312,9 +405,45 @@
     </style>
 </head>
 <body>
-    {% set riesgo = (nivel_riesgo or 'medio') | lower %}
+    {% set riesgo = (nivel_riesgo or 'medio') | lower | replace(' ', '-') %}
     {% set score_valor = (score_total or 0) | float %}
     {% set score_pct = score_valor if score_valor <= 100 else 100 %}
+    {% set pais_actual = (pais_referencia or 'internacional') | lower %}
+
+    {% set parte_analizada_label_final = parte_analizada_label if parte_analizada_label is defined and parte_analizada_label not in ['', '-'] else 'Parte analizada' %}
+    {% set rol_detectado_final = rol_contractual_detectado if rol_contractual_detectado is defined and rol_contractual_detectado not in ['', '-'] else 'Parte analizada' %}
+    {% set parte_analizada_identificada = nombre_parte_analizada if nombre_parte_analizada is defined and nombre_parte_analizada not in ['', '-'] else '-' %}
+
+    {% if pais_actual == "argentina" %}
+        {% set etiqueta_pais = "Argentina" %}
+    {% elif pais_actual == "uruguay" %}
+        {% set etiqueta_pais = "Uruguay" %}
+    {% elif pais_actual == "italia" %}
+        {% set etiqueta_pais = "Italia" %}
+    {% elif pais_actual == "espana" %}
+        {% set etiqueta_pais = "España" %}
+    {% else %}
+        {% set etiqueta_pais = "Internacional / Otro" %}
+    {% endif %}
+
+    {% set interpretacion_score_auto = interpretacion_score if interpretacion_score is defined and interpretacion_score else "El score es una medida numérica del riesgo total del contrato. Cuanto mayor es el valor, mayor es la exposición al riesgo." %}
+
+    {% if riesgo == "bajo" %}
+        {% set resumen_score = "Interpretación: riesgo bajo." %}
+        {% set explicacion_riesgo = "El contrato presenta una exposición relativamente contenida, aunque igualmente conviene revisar sus cláusulas relevantes antes de firmar." %}
+    {% elif riesgo == "medio" %}
+        {% set resumen_score = "Interpretación: riesgo medio." %}
+        {% set explicacion_riesgo = "El contrato presenta elementos que requieren revisión, ya que existen obligaciones o condiciones que podrían generar exposición jurídica, económica u operativa." %}
+    {% elif riesgo == "medio-alto" %}
+        {% set resumen_score = "Interpretación: riesgo medio-alto." %}
+        {% set explicacion_riesgo = "El contrato presenta una exposición importante y contiene cláusulas que merecen revisión cuidadosa antes de su firma o negociación." %}
+    {% elif riesgo == "alto" %}
+        {% set resumen_score = "Interpretación: riesgo alto." %}
+        {% set explicacion_riesgo = "El contrato presenta una exposición elevada y requiere revisión prioritaria, ya que contiene cláusulas con potencial impacto significativo." %}
+    {% else %}
+        {% set resumen_score = "Interpretación automática basada en el scoring del sistema." %}
+        {% set explicacion_riesgo = interpretacion_score_auto %}
+    {% endif %}
 
     <div class="wrapper">
         <div class="card">
@@ -324,6 +453,16 @@
             </div>
 
             <div class="content">
+                <div class="clarity-box">
+                    <h3>Identificación clara</h3>
+                    <p><strong>Usted está analizando este contrato como:</strong> {{ parte_analizada_label_final }}</p>
+                    <p><strong>Rol contractual detectado para su lado:</strong> {{ rol_detectado_final }}</p>
+                    {% if parte_analizada_identificada != "-" %}
+                    <p><strong>Parte analizada identificada:</strong> {{ parte_analizada_identificada }}</p>
+                    {% endif %}
+                    <p><strong>Importante:</strong> todas las conclusiones del informe están redactadas desde este punto de vista.</p>
+                </div>
+
                 <div class="summary-grid">
                     <div class="panel">
                         <h2>Resumen general</h2>
@@ -344,6 +483,40 @@
                         <div class="row">
                             <strong>Cantidad de riesgos:</strong> {{ cantidad_riesgos }}
                         </div>
+
+                        <div class="info-box">
+                            <strong>Parte analizada:</strong> {{ parte_analizada_label_final }}
+                        </div>
+
+                        <div class="info-box">
+                            <strong>Rol contractual detectado:</strong> {{ rol_detectado_final }}
+                        </div>
+
+                        {% if parte_analizada_identificada != "-" %}
+                        <div class="info-box">
+                            <strong>Parte analizada identificada:</strong> {{ parte_analizada_identificada }}
+                        </div>
+                        {% endif %}
+
+                        <div class="info-box">
+                            <strong>País / contexto legal de referencia:</strong> {{ etiqueta_pais }}
+                        </div>
+
+                        {% set partes_visibles = partes_con_rol if partes_con_rol is defined and partes_con_rol else partes %}
+
+                        {% if partes_visibles is defined and partes_visibles %}
+                        <div class="partes-box">
+                            <div class="row" style="margin-bottom: 8px;">
+                                <strong>Partes del contrato:</strong>
+                            </div>
+
+                            {% for parte in partes_visibles %}
+                            <div class="parte-linea">
+                                {{ parte }}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
 
                     <div class="panel score-card">
@@ -362,23 +535,35 @@
                         </div>
 
                         <div class="score-explainer">
-                            {{ interpretacion_score }}
+                            <strong>{{ resumen_score }}</strong><br>
+                            {{ explicacion_riesgo }}
+                        </div>
+
+                        <div class="score-help">
+                            {{ interpretacion_score_auto }}
                         </div>
                     </div>
                 </div>
 
+                <div class="mini-guide">
+                    <h3>Cómo leer este resultado</h3>
+                    <p><strong>1.</strong> El <strong>score</strong> muestra una medida numérica del riesgo total del contrato.</p>
+                    <p><strong>2.</strong> El <strong>nivel de riesgo</strong> traduce ese score a una lectura simple: bajo, medio, medio-alto o alto.</p>
+                    <p><strong>3.</strong> La <strong>parte analizada</strong> indica desde qué lado se interpreta el contrato.</p>
+                    <p><strong>4.</strong> El <strong>rol contractual detectado</strong> ayuda a evitar confusiones semánticas entre contratos distintos.</p>
+                    <p><strong>5.</strong> En <strong>Partes del contrato</strong> verá, cuando sea posible, el rol visible de cada parte.</p>
+                </div>
+
                 <div class="resumen-box">
-                    <h2>Interpretación ejecutiva</h2>
-                    <div class="interpretacion-tag">Lectura rápida para cliente</div>
+                    <h2>Resumen Ejecutivo para la Parte Analizada</h2>
+                    <div class="interpretacion-tag">Lectura rápida de la parte analizada</div>
                     <div class="resumen-text">
                         {{ interpretacion_ejecutiva }}
                     </div>
                 </div>
 
                 <div class="lang-note">
-                    <strong>Capacidad actual:</strong> el sistema puede interpretar contratos de ingreso en distintos idiomas.<br>
-                    <strong>Salida actual:</strong> español.<br>
-                    <strong>Próxima versión:</strong> selección de idioma de salida para JSON, Word y pantalla web.
+                    <strong>Nota jurídica de contexto:</strong> este análisis interpreta el contrato desde la perspectiva seleccionada y dentro del contexto legal de referencia indicado. Algunas conclusiones pueden variar según la legislación aplicable, la jurisdicción competente y la práctica judicial concreta.
                 </div>
 
                 <div class="actions">
@@ -389,7 +574,7 @@
 
                 <div class="trust-line">
                     Análisis generado con IA + scoring determinista auditable en Python.<br>
-                    Ingreso multiidioma activo · salida actual en español · evolución prevista a salida multiidioma.
+                    Perspectiva configurable · contexto legal de referencia · ingreso multiidioma activo.
                 </div>
             </div>
         </div>
