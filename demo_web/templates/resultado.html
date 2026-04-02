@@ -121,29 +121,6 @@
             line-height: 1.45;
         }
 
-        .clarity-box {
-            margin-bottom: 16px;
-            padding: 14px 16px;
-            background: #eef4ff;
-            border: 1px solid #d8e5ff;
-            border-radius: 12px;
-        }
-
-        .clarity-box h3 {
-            margin: 0 0 8px;
-            font-size: 16px;
-        }
-
-        .clarity-box p {
-            margin: 0 0 6px;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-
-        .clarity-box p:last-child {
-            margin-bottom: 0;
-        }
-
         .partes-box {
             margin-top: 10px;
             padding: 10px 12px;
@@ -453,23 +430,9 @@
             </div>
 
             <div class="content">
-                <div class="clarity-box">
-                    <h3>Identificación clara</h3>
-                    <p><strong>Usted está analizando este contrato como:</strong> {{ parte_analizada_label_final }}</p>
-                    <p><strong>Rol contractual detectado para su lado:</strong> {{ rol_detectado_final }}</p>
-                    {% if parte_analizada_identificada != "-" %}
-                    <p><strong>Parte analizada identificada:</strong> {{ parte_analizada_identificada }}</p>
-                    {% endif %}
-                    <p><strong>Importante:</strong> todas las conclusiones del informe están redactadas desde este punto de vista.</p>
-                </div>
-
                 <div class="summary-grid">
                     <div class="panel">
                         <h2>Resumen general</h2>
-
-                        <div class="row">
-                            <strong>Vertical detectada:</strong> {{ vertical | upper }}
-                        </div>
 
                         <div class="row">
                             <strong>Tipo de contrato:</strong> {{ tipo_contrato or "-" }}

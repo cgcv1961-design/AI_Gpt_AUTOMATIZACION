@@ -14,15 +14,11 @@ Normalizar correctamente:
 
 MEJORA PRINCIPAL
 ----------------
-Evitar que en la salida final aparezcan diccionarios como texto, por ejemplo:
-    {'rol': 'arrendatarios', 'nombre': '...'}
-y reemplazarlos por formatos humanos, por ejemplo:
-    Carlos Gustavo Caputi y Monica Elizabeth Santavec Vila (Arrendatarios / conduttori)
-
-Además:
-- mejora la detección de rol visible en audiovisual (artista / productora)
-- conserva compatibilidad con el sistema actual
-- no altera el scoring ni la estructura general del pipeline
+Evitar que en la salida final aparezcan diccionarios como texto y
+mejorar la inferencia de roles visibles, especialmente en:
+- NDA / confidencialidad
+- arrendamientos
+- audiovisual
 """
 
 import sys
@@ -41,10 +37,6 @@ try:
 except ImportError:
     ejecutar_analisis_audiovisual = None
 
-
-# =========================================================
-# DETECCIÓN DE VERTICAL
-# =========================================================
 
 def detectar_vertical(texto: str) -> str:
     texto = (texto or "").lower()
@@ -69,10 +61,6 @@ def detectar_vertical(texto: str) -> str:
     return "GENERAL"
 
 
-# =========================================================
-# CARGAR JSON
-# =========================================================
-
 def cargar_contrato(ruta_json: str) -> dict:
     if not os.path.exists(ruta_json):
         raise FileNotFoundError("Archivo JSON no encontrado.")
@@ -80,10 +68,6 @@ def cargar_contrato(ruta_json: str) -> dict:
     with open(ruta_json, "r", encoding="utf-8") as f:
         return json.load(f)
 
-
-# =========================================================
-# MENSAJES VISUALES DEL PROCESO
-# =========================================================
 
 def mostrar_etapas_analisis():
     print("📄 Analizando estructura del contrato")
@@ -98,10 +82,6 @@ def mostrar_etapas_analisis():
     print("📊 Calculando scoring")
     time.sleep(0.5)
 
-
-# =========================================================
-# HELPERS GENERALES
-# =========================================================
 
 def texto_limpio(valor: Any, default: str = "-") -> str:
     if valor in (None, "", [], {}):
@@ -143,21 +123,7 @@ def construir_texto_desde_lista(lista: List[str], max_items: int = 3) -> str:
     return "; ".join(items[:max_items])
 
 
-# =========================================================
-# NORMALIZACIÓN DE PARTES Y ROLES
-# =========================================================
-
 def extraer_nombre_y_rol_desde_parte(parte: Any) -> Tuple[str, str]:
-    """
-    Convierte una parte (string o dict) en:
-    - nombre limpio
-    - rol limpio
-
-    Casos soportados:
-    - "BE BETTER S.A. (Cliente)"
-    - {"nombre": "Alejandro Bustamante", "rol": "Proveedor/Receptor"}
-    - {"rol": "arrendatarios", "nombre": "Carlos..."}
-    """
     if isinstance(parte, dict):
         nombre = texto_limpio(
             parte.get("nombre") or parte.get("parte") or parte.get("name"),
@@ -181,10 +147,35 @@ def extraer_nombre_y_rol_desde_parte(parte: Any) -> Tuple[str, str]:
     return texto, ""
 
 
+def inferir_rol_por_tipo_y_posicion(tipo_contrato: str, posicion: int, total_partes: int) -> str:
+    """
+    Heurística cuando el JSON no trae rol explícito.
+    posicion es 0-based.
+    """
+    tipo = (tipo_contrato or "").lower()
+
+    if any(x in tipo for x in ["confidencialidad", "nda", "propiedad intelectual"]):
+        if posicion == 0:
+            return "Cliente"
+        if posicion == 1:
+            return "Proveedor"
+
+    if any(x in tipo for x in ["arrendamiento", "locación", "locacion", "locazione"]):
+        if posicion == 0:
+            return "Arrendador / locatore"
+        if posicion == 1:
+            return "Arrendatario / conduttore"
+
+    if any(x in tipo for x in ["audiovisual", "artístico", "artistico", "intérprete", "interprete"]):
+        if posicion == 0:
+            return "Productora"
+        if posicion == 1:
+            return "Artista"
+
+    return ""
+
+
 def normalizar_rol_visible(rol: str, nombre: str = "", perspectiva: str = "proveedor") -> str:
-    """
-    Convierte roles crudos o implícitos en etiquetas visibles más claras.
-    """
     rol_txt = (rol or "").strip().lower()
     nombre_txt = (nombre or "").strip().lower()
 
@@ -215,7 +206,6 @@ def normalizar_rol_visible(rol: str, nombre: str = "", perspectiva: str = "prove
     if rol_txt in mapa_directo:
         return mapa_directo[rol_txt]
 
-    # Detección por palabras del rol
     if any(x in rol_txt for x in ["arrendador", "locador", "locatore", "propietario"]):
         return "Arrendador / locatore"
     if any(x in rol_txt for x in ["arrendatario", "arrendatarios", "inquilino", "locatario", "conduttore"]):
@@ -224,19 +214,18 @@ def normalizar_rol_visible(rol: str, nombre: str = "", perspectiva: str = "prove
         return "Cliente"
     if any(x in rol_txt for x in ["proveedor", "supplier", "receptor"]):
         return "Proveedor"
-    if any(x in rol_txt for x in ["productora"]):
+    if "productora" in rol_txt:
         return "Productora"
-    if any(x in rol_txt for x in ["productor"]):
+    if "productor" in rol_txt:
         return "Productor"
     if any(x in rol_txt for x in ["artista", "interprete", "intérprete"]):
-        return "Artista / intérprete"
+        return "Artista"
 
-    # Detección por nombre / texto libre
     if any(x in nombre_txt for x in ["artista", "el artista", "intérprete", "interprete"]):
-        return "Artista / intérprete"
-    if any(x in nombre_txt for x in ["productora"]):
+        return "Artista"
+    if "productora" in nombre_txt:
         return "Productora"
-    if any(x in nombre_txt for x in ["productor"]):
+    if "productor" in nombre_txt:
         return "Productor"
     if any(x in nombre_txt for x in ["arrendador", "locatore", "locador", "propietario"]):
         return "Arrendador / locatore"
@@ -253,15 +242,14 @@ def normalizar_rol_visible(rol: str, nombre: str = "", perspectiva: str = "prove
     return "Parte proponente del contrato"
 
 
-def formatear_parte_visible(parte: Any, perspectiva: str = "proveedor") -> str:
-    """
-    Devuelve una parte en formato visible humano:
-    - BE BETTER S.A. (Cliente)
-    - Alejandro Bustamante (Proveedor)
-    - Eddie Mori (Arrendador / locatore)
-    """
+def formatear_parte_visible(parte: Any, perspectiva: str = "proveedor", tipo_contrato: str = "", posicion: int = -1, total_partes: int = 0) -> str:
     nombre, rol = extraer_nombre_y_rol_desde_parte(parte)
-    rol_visible = normalizar_rol_visible(rol, nombre=nombre, perspectiva=perspectiva)
+
+    rol_fuente = rol
+    if not rol_fuente:
+        rol_fuente = inferir_rol_por_tipo_y_posicion(tipo_contrato, posicion, total_partes)
+
+    rol_visible = normalizar_rol_visible(rol_fuente, nombre=nombre, perspectiva=perspectiva)
 
     if nombre == "-":
         return rol_visible
@@ -272,22 +260,13 @@ def formatear_parte_visible(parte: Any, perspectiva: str = "proveedor") -> str:
     return nombre
 
 
-def inferir_rol_contractual_desde_parte(parte: Any, perspectiva: str) -> str:
-    nombre, rol = extraer_nombre_y_rol_desde_parte(parte)
-    return normalizar_rol_visible(rol, nombre=nombre, perspectiva=perspectiva)
-
-
 def obtener_partes_normalizadas(resultado: Dict[str, Any]) -> List[Any]:
-    """
-    Obtiene la lista de partes desde el JSON base sin romper compatibilidad.
-    """
     nucleo = resultado.get("nucleo_contractual", {}) or {}
     partes = lista_desde_valor(nucleo.get("partes"))
 
     if partes:
         return partes
 
-    # Fallback por compatibilidad si el esquema vino distinto
     candidatos = [
         nucleo.get("partes_involucradas"),
         nucleo.get("intervinientes"),
@@ -302,16 +281,24 @@ def obtener_partes_normalizadas(resultado: Dict[str, Any]) -> List[Any]:
 
 
 def construir_partes_con_rol(resultado: Dict[str, Any], perspectiva: str) -> List[str]:
-    """
-    Devuelve la lista de partes ya enriquecida con rol visible.
-    """
     partes = obtener_partes_normalizadas(resultado)
     if not partes:
         return []
 
+    tipo_contrato = texto_limpio((resultado.get("nucleo_contractual", {}) or {}).get("tipo_contrato"), default="")
+    total = len(partes)
+
     salida = []
-    for parte in partes:
-        salida.append(formatear_parte_visible(parte, perspectiva=perspectiva))
+    for i, parte in enumerate(partes):
+        salida.append(
+            formatear_parte_visible(
+                parte,
+                perspectiva=perspectiva,
+                tipo_contrato=tipo_contrato,
+                posicion=i,
+                total_partes=total,
+            )
+        )
 
     return salida
 
@@ -319,6 +306,7 @@ def construir_partes_con_rol(resultado: Dict[str, Any], perspectiva: str) -> Lis
 def construir_metadata_presentacion(resultado: Dict[str, Any], perspectiva: str) -> Dict[str, Any]:
     partes = obtener_partes_normalizadas(resultado)
     partes_con_rol = construir_partes_con_rol(resultado, perspectiva=perspectiva)
+    tipo_contrato = texto_limpio((resultado.get("nucleo_contractual", {}) or {}).get("tipo_contrato"), default="")
 
     parte_analizada_label = (
         "Parte receptora del contrato"
@@ -327,10 +315,14 @@ def construir_metadata_presentacion(resultado: Dict[str, Any], perspectiva: str)
     )
 
     parte_analizada_raw = None
+    parte_analizada_pos = 0
+
     if partes:
         if perspectiva == "proveedor":
-            parte_analizada_raw = partes[1] if len(partes) >= 2 else partes[0]
+            parte_analizada_pos = 1 if len(partes) >= 2 else 0
+            parte_analizada_raw = partes[parte_analizada_pos]
         else:
+            parte_analizada_pos = 0
             parte_analizada_raw = partes[0]
 
     nombre_parte_analizada = "-"
@@ -342,6 +334,8 @@ def construir_metadata_presentacion(resultado: Dict[str, Any], perspectiva: str)
 
     if parte_analizada_raw is not None:
         nombre, rol = extraer_nombre_y_rol_desde_parte(parte_analizada_raw)
+        if not rol:
+            rol = inferir_rol_por_tipo_y_posicion(tipo_contrato, parte_analizada_pos, len(partes))
         nombre_parte_analizada = nombre
         rol_contractual_detectado = normalizar_rol_visible(
             rol,
@@ -357,32 +351,13 @@ def construir_metadata_presentacion(resultado: Dict[str, Any], perspectiva: str)
     }
 
 
-# =========================================================
-# AJUSTE DE PERSPECTIVA DEL CONTENIDO
-# =========================================================
-
 def ajustar_resultado_a_perspectiva(resultado: Dict[str, Any], perspectiva: str) -> Dict[str, Any]:
-    """
-    Ajusta el contenido ejecutivo final según la perspectiva elegida.
-
-    NO modifica:
-    - scoring
-    - riesgos clasificados
-    - estructura base del contrato
-
-    SOLO reescribe:
-    - resumen_ejecutivo.vision_general
-    - resumen_ejecutivo.recomendacion_estrategica_final
-    - informe_detallado.preguntas_clave_antes_de_firmar
-    - informe_detallado.conclusion_profesional
-    """
     if not isinstance(resultado, dict):
         return resultado
 
     informe_cliente = resultado.get("informe_cliente", {}) or {}
     resumen = informe_cliente.get("resumen_ejecutivo", {}) or {}
     detalle = informe_cliente.get("informe_detallado", {}) or {}
-    analisis_prof = resultado.get("analisis_profesional", {}) or {}
     scoring = resultado.get("scoring", {}) or {}
     nucleo = resultado.get("nucleo_contractual", {}) or {}
     metadata = resultado.get("metadata_sistema", {}) or {}
@@ -474,10 +449,6 @@ def ajustar_resultado_a_perspectiva(resultado: Dict[str, Any], perspectiva: str)
     return resultado
 
 
-# =========================================================
-# GUARDAR JSON DE SALIDA
-# =========================================================
-
 def guardar_reporte_json(resultado: dict, ruta_json_entrada: str) -> str:
     os.makedirs("output", exist_ok=True)
 
@@ -490,20 +461,12 @@ def guardar_reporte_json(resultado: dict, ruta_json_entrada: str) -> str:
     return ruta_output
 
 
-# =========================================================
-# GENERAR WORD SEGÚN VERTICAL
-# =========================================================
-
 def generar_reporte_word_por_vertical(vertical: str, resultado: dict, ruta_output_json: str) -> str:
     if vertical == "AUDIOVISUAL":
         return generar_word_audiovisual(resultado, ruta_output_json)
 
     return generar_word_general(resultado, ruta_output_json)
 
-
-# =========================================================
-# MOTOR PRINCIPAL
-# =========================================================
 
 def ejecutar_motor(
     ruta_json: str,
@@ -573,10 +536,6 @@ def ejecutar_motor(
         "pais_referencia": pais_referencia,
     }
 
-
-# =========================================================
-# EJECUCIÓN DESDE CONSOLA
-# =========================================================
 
 if __name__ == "__main__":
     print("\n======================================")

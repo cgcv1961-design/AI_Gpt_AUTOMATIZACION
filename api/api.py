@@ -143,10 +143,6 @@ def formatear_parte_visible(parte: Any) -> str:
     return texto_limpio(parte, default="-")
 
 
-# =========================================================
-# NORMALIZADORES DE ENTRADA
-# =========================================================
-
 def normalizar_perspectiva_entrada(valor: str) -> str:
     texto = (valor or "").strip().lower()
 
@@ -181,10 +177,6 @@ def normalizar_pais_entrada(valor: str) -> str:
 
     return mapa.get(texto, "internacional")
 
-
-# =========================================================
-# EXTRACCIÓN DE DATOS PARA LA UI
-# =========================================================
 
 def obtener_tipo_contrato(data: dict, resumen: dict) -> str:
     nucleo = data.get("nucleo_contractual", {}) or {}
@@ -400,7 +392,6 @@ async def analizar(
                 f"""
                 <p>El pipeline terminó, pero no se pudo renderizar <code>resultado.html</code>.</p>
                 <ul>
-                    <li><b>Vertical:</b> {html.escape(str(salida.get("vertical", "")))}</li>
                     <li><b>Perspectiva original recibida:</b> {html.escape(str(perspectiva))}</li>
                     <li><b>Perspectiva normalizada:</b> {html.escape(str(perspectiva_normalizada))}</li>
                     <li><b>País original recibido:</b> {html.escape(str(pais_referencia))}</li>
@@ -430,7 +421,6 @@ async def analizar(
             request=request,
             name="resultado.html",
             context={
-                "vertical": salida.get("vertical", "-"),
                 "json_nombre": json_nombre,
                 "word_nombre": word_nombre,
                 "tipo_contrato": tipo_contrato,
