@@ -373,11 +373,6 @@
     </style>
 </head>
 <body>
-    {#
-    =========================================================
-    PREPARACIÓN DE VARIABLES DE PRESENTACIÓN
-    =========================================================
-    #}
     {% set riesgo = (nivel_riesgo or 'medio') | lower | replace(' ', '-') %}
     {% set score_valor = (score_total or 0) | float %}
     {% set score_pct = score_valor if score_valor <= 100 else 100 %}
@@ -399,13 +394,6 @@
         {% set etiqueta_pais = "Internacional / Otro" %}
     {% endif %}
 
-    {#
-    =========================================================
-    INTERPRETACIÓN VISUAL DEL SCORE
-    Dejamos una sola explicación visible, dentro de la caja.
-    Eliminamos la línea repetida de abajo.
-    =========================================================
-    #}
     {% if riesgo == "bajo" %}
         {% set resumen_score = "Interpretación: riesgo bajo." %}
         {% set explicacion_riesgo = "El contrato presenta una exposición relativamente contenida, aunque igualmente conviene revisar sus cláusulas relevantes antes de firmar." %}
@@ -423,13 +411,6 @@
         {% set explicacion_riesgo = interpretacion_score if interpretacion_score is defined and interpretacion_score else "El score es una medida numérica del riesgo total del contrato." %}
     {% endif %}
 
-    {#
-    =========================================================
-    RESUMEN EJECUTIVO WEB MÁS CORTO
-    La idea es que la web sea más ejecutiva que el Word.
-    Armamos un texto corto usando la información ya calculada.
-    =========================================================
-    #}
     {% set partes_visibles = partes_con_rol if partes_con_rol is defined and partes_con_rol else partes %}
     {% set resumen_web = "" %}
 
@@ -437,10 +418,6 @@
         {% set resumen_web = "El contrato muestra " ~ (nivel_riesgo or "riesgo no determinado") | lower ~ " y se analiza desde el rol " ~ rol_detectado_final ~ "." %}
     {% else %}
         {% set resumen_web = "El contrato presenta " ~ (nivel_riesgo or "riesgo no determinado") | lower ~ " y conviene revisar las cláusulas principales antes de firmar." %}
-    {% endif %}
-
-    {% if interpretacion_ejecutiva %}
-        {# dejamos disponible el texto original si más adelante quieres volver a usarlo #}
     {% endif %}
 
     <div class="wrapper">
@@ -523,12 +500,6 @@
                     </div>
                 </div>
 
-                {#
-                =========================================================
-                CÓMO LEER EL RESULTADO
-                Versión resumida: 3 puntos, más limpia.
-                =========================================================
-                #}
                 <div class="mini-guide">
                     <h3>Cómo leer este resultado</h3>
                     <p><strong>1.</strong> El <strong>score</strong> muestra una medida numérica del riesgo total del contrato.</p>
@@ -536,12 +507,6 @@
                     <p><strong>3.</strong> Las <strong>partes</strong> y el <strong>rol contractual detectado</strong> indican desde qué lado se interpreta el contrato.</p>
                 </div>
 
-                {#
-                =========================================================
-                RESUMEN EJECUTIVO WEB
-                Más corto y más ejecutivo que el Word.
-                =========================================================
-                #}
                 <div class="resumen-box">
                     <h2>Resumen Ejecutivo para la Parte Analizada</h2>
                     <div class="interpretacion-tag">Lectura rápida de la parte analizada</div>
@@ -553,13 +518,13 @@
                 </div>
 
                 <div class="actions">
-                    <a class="btn btn-primary" href="/descargar/json/{{ json_nombre }}">Descargar JSON</a>
-                    <a class="btn btn-primary" href="/descargar/word/{{ word_nombre }}">Descargar Word</a>
+                    <a class="btn btn-primary" href="/descargar/word/{{ word_nombre }}">Descargar informe (Word)</a>
+                    <a class="btn btn-secondary" href="/descargar/json/{{ json_nombre }}">JSON técnico</a>
                     <a class="btn btn-secondary" href="/">Analizar otro contrato</a>
                 </div>
 
                 <div class="trust-line">
-                    Análisis generado con IA + scoring determinista auditable en Python.<br>
+                    Análisis generado con IA + medición objetiva de riesgos.<br>
                     Perspectiva configurable · contexto legal de referencia · ingreso multiidioma activo.
                 </div>
             </div>

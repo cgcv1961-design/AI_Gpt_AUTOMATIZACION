@@ -20,7 +20,7 @@ IMPORTANTE
 - El modelo debe devolver EXCLUSIVAMENTE JSON válido en español.
 """
 
-VERSION_PROMPT_GENERAL = "2.2_general_deterministico_claridad_roles"
+VERSION_PROMPT_GENERAL = "2.3_general_deterministico_claridad_roles_resumen_directo"
 
 
 def construir_prompt_general(contrato: str, perfil: str) -> str:
@@ -133,11 +133,16 @@ A) RESUMEN EJECUTIVO ("vision_general")
 - Máximo 3 frases.
 - Debe servir para lectura rápida.
 - Debe incluir:
-  • idea principal del contrato
   • nivel de riesgo global
+  • implicancia práctica principal
   • 2 o 3 focos realmente críticos
-- No repetir literalmente toda la lista de puntos críticos.
+- NO empezar con fórmulas como:
+  "Este contrato se analiza desde la perspectiva..."
+  "Rol contractual detectado..."
+  "La parte analizada es..."
+- IR DIRECTO al punto.
 - No usar introducciones largas.
+- Debe sonar útil para un cliente no técnico.
 
 B) NIVEL DE RIESGO GLOBAL
 - Debe ser una formulación simple y comprensible.
