@@ -170,13 +170,6 @@
             padding: 10px 12px;
         }
 
-        .score-help {
-            margin-top: 8px;
-            font-size: 13px;
-            line-height: 1.5;
-            color: var(--muted);
-        }
-
         .score-bar-box {
             margin-top: 4px;
         }
@@ -270,8 +263,6 @@
             line-height: 1.55;
             color: var(--text);
             white-space: pre-wrap;
-            max-height: 260px;
-            overflow: auto;
         }
 
         .mini-guide {
@@ -382,6 +373,11 @@
     </style>
 </head>
 <body>
+    {#
+    =========================================================
+    PREPARACIÓN DE VARIABLES DE PRESENTACIÓN
+    =========================================================
+    #}
     {% set riesgo = (nivel_riesgo or 'medio') | lower | replace(' ', '-') %}
     {% set score_valor = (score_total or 0) | float %}
     {% set score_pct = score_valor if score_valor <= 100 else 100 %}
@@ -403,8 +399,13 @@
         {% set etiqueta_pais = "Internacional / Otro" %}
     {% endif %}
 
-    {% set interpretacion_score_auto = interpretacion_score if interpretacion_score is defined and interpretacion_score else "El score es una medida numérica del riesgo total del contrato. Cuanto mayor es el valor, mayor es la exposición al riesgo." %}
-
+    {#
+    =========================================================
+    INTERPRETACIÓN VISUAL DEL SCORE
+    Dejamos una sola explicación visible, dentro de la caja.
+    Eliminamos la línea repetida de abajo.
+    =========================================================
+    #}
     {% if riesgo == "bajo" %}
         {% set resumen_score = "Interpretación: riesgo bajo." %}
         {% set explicacion_riesgo = "El contrato presenta una exposición relativamente contenida, aunque igualmente conviene revisar sus cláusulas relevantes antes de firmar." %}
@@ -419,7 +420,27 @@
         {% set explicacion_riesgo = "El contrato presenta una exposición elevada y requiere revisión prioritaria, ya que contiene cláusulas con potencial impacto significativo." %}
     {% else %}
         {% set resumen_score = "Interpretación automática basada en el scoring del sistema." %}
-        {% set explicacion_riesgo = interpretacion_score_auto %}
+        {% set explicacion_riesgo = interpretacion_score if interpretacion_score is defined and interpretacion_score else "El score es una medida numérica del riesgo total del contrato." %}
+    {% endif %}
+
+    {#
+    =========================================================
+    RESUMEN EJECUTIVO WEB MÁS CORTO
+    La idea es que la web sea más ejecutiva que el Word.
+    Armamos un texto corto usando la información ya calculada.
+    =========================================================
+    #}
+    {% set partes_visibles = partes_con_rol if partes_con_rol is defined and partes_con_rol else partes %}
+    {% set resumen_web = "" %}
+
+    {% if tipo_contrato and rol_detectado_final != "Parte analizada" %}
+        {% set resumen_web = "El contrato muestra " ~ (nivel_riesgo or "riesgo no determinado") | lower ~ " y se analiza desde el rol " ~ rol_detectado_final ~ "." %}
+    {% else %}
+        {% set resumen_web = "El contrato presenta " ~ (nivel_riesgo or "riesgo no determinado") | lower ~ " y conviene revisar las cláusulas principales antes de firmar." %}
+    {% endif %}
+
+    {% if interpretacion_ejecutiva %}
+        {# dejamos disponible el texto original si más adelante quieres volver a usarlo #}
     {% endif %}
 
     <div class="wrapper">
@@ -465,8 +486,6 @@
                             <strong>País / contexto legal de referencia:</strong> {{ etiqueta_pais }}
                         </div>
 
-                        {% set partes_visibles = partes_con_rol if partes_con_rol is defined and partes_con_rol else partes %}
-
                         {% if partes_visibles is defined and partes_visibles %}
                         <div class="partes-box">
                             <div class="row" style="margin-bottom: 8px;">
@@ -501,28 +520,32 @@
                             <strong>{{ resumen_score }}</strong><br>
                             {{ explicacion_riesgo }}
                         </div>
-
-                        <div class="score-help">
-                            {{ interpretacion_score_auto }}
-                        </div>
                     </div>
                 </div>
 
+                {#
+                =========================================================
+                CÓMO LEER EL RESULTADO
+                Versión resumida: 3 puntos, más limpia.
+                =========================================================
+                #}
                 <div class="mini-guide">
                     <h3>Cómo leer este resultado</h3>
                     <p><strong>1.</strong> El <strong>score</strong> muestra una medida numérica del riesgo total del contrato.</p>
                     <p><strong>2.</strong> El <strong>nivel de riesgo</strong> traduce ese score a una lectura simple: bajo, medio, medio-alto o alto.</p>
-                    <p><strong>3.</strong> La <strong>parte analizada</strong> indica desde qué lado se interpreta el contrato.</p>
-                    <p><strong>4.</strong> El <strong>rol contractual detectado</strong> ayuda a evitar confusiones semánticas entre contratos distintos.</p>
-                    <p><strong>5.</strong> En <strong>Partes del contrato</strong> verá, cuando sea posible, el rol visible de cada parte.</p>
+                    <p><strong>3.</strong> Las <strong>partes</strong> y el <strong>rol contractual detectado</strong> indican desde qué lado se interpreta el contrato.</p>
                 </div>
 
+                {#
+                =========================================================
+                RESUMEN EJECUTIVO WEB
+                Más corto y más ejecutivo que el Word.
+                =========================================================
+                #}
                 <div class="resumen-box">
                     <h2>Resumen Ejecutivo para la Parte Analizada</h2>
                     <div class="interpretacion-tag">Lectura rápida de la parte analizada</div>
-                    <div class="resumen-text">
-                        {{ interpretacion_ejecutiva }}
-                    </div>
+                    <div class="resumen-text">{{ resumen_web }}</div>
                 </div>
 
                 <div class="lang-note">
