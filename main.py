@@ -12,19 +12,32 @@ Normalizar correctamente:
 - roles contractuales visibles
 - nombres de partes para UI y Word
 
-MEJORA PRINCIPAL
-----------------
-Evitar que en la salida final aparezcan diccionarios como texto y
-mejorar la inferencia de roles visibles, especialmente en:
-- NDA / confidencialidad
-- arrendamientos
-- audiovisual
+MEJORA PRINCIPAL DE ESTA VERSIÓN
+--------------------------------
+Se agrega una limpieza automática del campo:
+    informe_cliente.resumen_ejecutivo.vision_general
+
+Esto permite eliminar aperturas redundantes del tipo:
+- "Este contrato se analiza desde la perspectiva..."
+- "Rol contractual detectado: ..."
+
+La idea es que el resumen ejecutivo:
+- entre directo al riesgo
+- sea más útil para cliente final
+- no repita información que ya aparece antes en el informe
+
+IMPORTANTE
+----------
+El Word NO inventa contenido nuevo.
+El Word traduce el JSON final a formato Word.
+Por eso la corrección correcta debe hacerse acá, en la generación del JSON final.
 """
 
 import sys
 import json
 import os
 import time
+import re
 from typing import Any, Dict, List, Tuple
 
 from utils.generador_word_general import generar_word_general
@@ -37,6 +50,10 @@ try:
 except ImportError:
     ejecutar_analisis_audiovisual = None
 
+
+# =========================================================
+# DETECCIÓN DE VERTICAL
+# =========================================================
 
 def detectar_vertical(texto: str) -> str:
     texto = (texto or "").lower()
@@ -61,6 +78,10 @@ def detectar_vertical(texto: str) -> str:
     return "GENERAL"
 
 
+# =========================================================
+# CARGAR JSON
+# =========================================================
+
 def cargar_contrato(ruta_json: str) -> dict:
     if not os.path.exists(ruta_json):
         raise FileNotFoundError("Archivo JSON no encontrado.")
@@ -68,6 +89,10 @@ def cargar_contrato(ruta_json: str) -> dict:
     with open(ruta_json, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
+# =========================================================
+# MENSAJES VISUALES DEL PROCESO
+# =========================================================
 
 def mostrar_etapas_analisis():
     print("📄 Analizando estructura del contrato")
@@ -82,6 +107,10 @@ def mostrar_etapas_analisis():
     print("📊 Calculando scoring")
     time.sleep(0.5)
 
+
+# =========================================================
+# HELPERS GENERALES
+# =========================================================
 
 def texto_limpio(valor: Any, default: str = "-") -> str:
     if valor in (None, "", [], {}):
@@ -122,6 +151,10 @@ def construir_texto_desde_lista(lista: List[str], max_items: int = 3) -> str:
         return ""
     return "; ".join(items[:max_items])
 
+
+# =========================================================
+# NORMALIZACIÓN DE PARTES Y ROLES
+# =========================================================
 
 def extraer_nombre_y_rol_desde_parte(parte: Any) -> Tuple[str, str]:
     if isinstance(parte, dict):
@@ -242,7 +275,13 @@ def normalizar_rol_visible(rol: str, nombre: str = "", perspectiva: str = "prove
     return "Parte proponente del contrato"
 
 
-def formatear_parte_visible(parte: Any, perspectiva: str = "proveedor", tipo_contrato: str = "", posicion: int = -1, total_partes: int = 0) -> str:
+def formatear_parte_visible(
+    parte: Any,
+    perspectiva: str = "proveedor",
+    tipo_contrato: str = "",
+    posicion: int = -1,
+    total_partes: int = 0
+) -> str:
     nombre, rol = extraer_nombre_y_rol_desde_parte(parte)
 
     rol_fuente = rol
@@ -351,6 +390,57 @@ def construir_metadata_presentacion(resultado: Dict[str, Any], perspectiva: str)
     }
 
 
+# =========================================================
+# LIMPIEZA DE REDUNDANCIAS EN RESUMEN EJECUTIVO
+# =========================================================
+
+def limpiar_apertura_resumen_ejecutivo(texto: str) -> str:
+    """
+    Limpia aperturas redundantes del resumen ejecutivo.
+
+    Ejemplos que elimina:
+    - "Este Acuerdo ... se analiza desde la perspectiva de la parte analizada."
+    - "Este contrato se analiza desde la perspectiva..."
+    - "Rol contractual detectado: Proveedor."
+
+    La idea es que el resumen empiece directamente por:
+    - el nivel de riesgo
+    - el impacto práctico
+    - los focos críticos
+    """
+    texto = texto_limpio(texto, default="")
+    if not texto:
+        return texto
+
+    patrones = [
+        r"^Este\s+.+?\s+se\s+analiza\s+desde\s+la\s+perspectiva\s+de\s+la\s+parte\s+analizada\.\s*",
+        r"^Este\s+contrato\s+se\s+analiza\s+desde\s+la\s+perspectiva\s+de\s+la\s+parte\s+analizada\.\s*",
+        r"^Rol\s+contractual\s+detectado:\s*[^.]+\.\s*",
+    ]
+
+    texto_limpio_final = texto
+    for patron in patrones:
+        texto_limpio_final = re.sub(patron, "", texto_limpio_final, flags=re.IGNORECASE)
+
+    # Si quedaron ambos bloques juntos por haber sido generados en una sola frase, hacemos una pasada extra.
+    texto_limpio_final = re.sub(
+        r"Rol\s+contractual\s+detectado:\s*[^.]+\.\s*",
+        "",
+        texto_limpio_final,
+        flags=re.IGNORECASE
+    )
+
+    # Ajuste de espacios
+    texto_limpio_final = re.sub(r"\s+", " ", texto_limpio_final).strip()
+
+    # Si por alguna razón quedó vacío, devolvemos el original para no romper la salida
+    return texto_limpio_final if texto_limpio_final else texto
+
+
+# =========================================================
+# AJUSTE DE PERSPECTIVA DEL CONTENIDO
+# =========================================================
+
 def ajustar_resultado_a_perspectiva(resultado: Dict[str, Any], perspectiva: str) -> Dict[str, Any]:
     if not isinstance(resultado, dict):
         return resultado
@@ -366,8 +456,16 @@ def ajustar_resultado_a_perspectiva(resultado: Dict[str, Any], perspectiva: str)
 
     tipo_contrato = texto_limpio(nucleo.get("tipo_contrato"), default="contrato analizado")
     nivel_riesgo_global = texto_limpio(resumen.get("nivel_riesgo_global"), default="-")
-    puntos_criticos = [texto_limpio(x, default="") for x in lista_desde_valor(resumen.get("puntos_criticos")) if texto_limpio(x, default="")]
-    hallazgos = [texto_limpio(x, default="") for x in lista_desde_valor(detalle.get("hallazgos_principales")) if texto_limpio(x, default="")]
+    puntos_criticos = [
+        texto_limpio(x, default="")
+        for x in lista_desde_valor(resumen.get("puntos_criticos"))
+        if texto_limpio(x, default="")
+    ]
+    hallazgos = [
+        texto_limpio(x, default="")
+        for x in lista_desde_valor(detalle.get("hallazgos_principales"))
+        if texto_limpio(x, default="")
+    ]
     score_total = texto_limpio(scoring.get("score_total"), default="-")
     nivel_scoring = texto_limpio(scoring.get("nivel_riesgo"), default="-")
     pais = texto_limpio(metadata.get("pais_referencia"), default="internacional")
@@ -437,10 +535,21 @@ def ajustar_resultado_a_perspectiva(resultado: Dict[str, Any], perspectiva: str)
             f"{hallazgos_txt if hallazgos_txt else 'Las alertas principales deben revisarse antes de avanzar.'}"
         )
 
+    # -----------------------------------------------------
+    # APLICACIÓN DE LOS TEXTOS
+    # -----------------------------------------------------
     resumen["vision_general"] = nueva_vision
     resumen["recomendacion_estrategica_final"] = nueva_recomendacion
     detalle["preguntas_clave_antes_de_firmar"] = nuevas_preguntas
     detalle["conclusion_profesional"] = nueva_conclusion
+
+    # -----------------------------------------------------
+    # LIMPIEZA FINAL DEL RESUMEN EJECUTIVO
+    # Acá eliminamos la redundancia aunque el modelo la haya generado.
+    # -----------------------------------------------------
+    resumen["vision_general"] = limpiar_apertura_resumen_ejecutivo(
+        texto_limpio(resumen.get("vision_general"), default="")
+    )
 
     informe_cliente["resumen_ejecutivo"] = resumen
     informe_cliente["informe_detallado"] = detalle
@@ -448,6 +557,10 @@ def ajustar_resultado_a_perspectiva(resultado: Dict[str, Any], perspectiva: str)
 
     return resultado
 
+
+# =========================================================
+# GUARDAR JSON DE SALIDA
+# =========================================================
 
 def guardar_reporte_json(resultado: dict, ruta_json_entrada: str) -> str:
     os.makedirs("output", exist_ok=True)
@@ -461,12 +574,20 @@ def guardar_reporte_json(resultado: dict, ruta_json_entrada: str) -> str:
     return ruta_output
 
 
+# =========================================================
+# GENERAR WORD SEGÚN VERTICAL
+# =========================================================
+
 def generar_reporte_word_por_vertical(vertical: str, resultado: dict, ruta_output_json: str) -> str:
     if vertical == "AUDIOVISUAL":
         return generar_word_audiovisual(resultado, ruta_output_json)
 
     return generar_word_general(resultado, ruta_output_json)
 
+
+# =========================================================
+# MOTOR PRINCIPAL
+# =========================================================
 
 def ejecutar_motor(
     ruta_json: str,
@@ -536,6 +657,10 @@ def ejecutar_motor(
         "pais_referencia": pais_referencia,
     }
 
+
+# =========================================================
+# EJECUCIÓN DESDE CONSOLA
+# =========================================================
 
 if __name__ == "__main__":
     print("\n======================================")
