@@ -245,7 +245,7 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
 
     heading_compacto("Identificación clara", level=1)
     parrafo_compacto(f"Usted está analizando este contrato como: {parte_analizada_label}")
-    parrafo_compacto(f"Rol contractual detectado para su lado: {rol_contractual_detectado}")
+    parrafo_compacto(f"Rol contractual detectado : {rol_contractual_detectado}")
     if nombre_parte_analizada != "-":
         parrafo_compacto(f"Parte analizada identificada: {nombre_parte_analizada}")
 
