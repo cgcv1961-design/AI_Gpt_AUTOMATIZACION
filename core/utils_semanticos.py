@@ -1,5 +1,5 @@
 """
-core/utils_semanticos.py
+AI_GPT_AUTOMATIZACION/core/utils_semanticos.py
 
 Utilidades Semánticas Reutilizables
 
