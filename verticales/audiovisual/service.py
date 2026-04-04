@@ -28,17 +28,14 @@ Esto significa que:
 - el Word debe salir exclusivamente de ese JSON
 - no debe haber una segunda interpretación paralela en el generador Word
 
-FLUJO
------
-1) Contrato en texto
-2) Prompt audiovisual
-3) Respuesta del modelo
-4) Extracción / parse del JSON
-5) Severidad determinística
-6) Scoring audiovisual
-7) Metadata técnica
-8) Normalización final del JSON
-9) Retorno del JSON final unificado
+MEJORA DE ESTA VERSIÓN
+----------------------
+La severidad audiovisual también pasa a guardar:
+- severidad base
+- familias relevantes detectadas
+- detalle auditable de reglas relevantes
+
+Sin reemplazar su scoring específico.
 """
 
 import json
@@ -47,7 +44,10 @@ from typing import Dict, Any
 from openai import OpenAI
 
 from config import CONFIG
-from utils.clasificador_severidad import clasificar_severidad
+from utils.clasificador_severidad import (
+    clasificar_severidad,
+    analizar_severidad_detallada,
+)
 from utils.progreso import spinner
 from verticales.audiovisual.prompts_aud import construir_prompt_audiovisual
 from verticales.audiovisual.scoring_engine_productor import aplicar_scoring_aud_productor
@@ -105,7 +105,6 @@ def _extraer_json_valido(texto: str) -> Dict[str, Any]:
         for parte in partes:
             candidato = parte.strip()
 
-            # elimina encabezado 'json' si existe
             if candidato.lower().startswith("json"):
                 candidato = candidato[4:].strip()
 
@@ -132,9 +131,6 @@ def _extraer_json_valido(texto: str) -> Dict[str, Any]:
         except Exception:
             pass
 
-    # ------------------------------------------------
-    # Si no se pudo recuperar JSON
-    # ------------------------------------------------
     raise ValueError(
         "No se pudo extraer JSON válido del modelo.\n"
         f"Respuesta:\n{texto[:500]}"
@@ -228,7 +224,14 @@ def analizar_audiovisual(
                 continue
 
             descripcion = riesgo.get("descripcion", "")
-            riesgo["severidad"] = clasificar_severidad(descripcion)
+            analisis = analizar_severidad_detallada(descripcion)
+
+            riesgo["severidad"] = analisis["severidad_final"]
+            riesgo["severidad_base"] = analisis["severidad_base"]
+            riesgo["familias_relevantes_detectadas"] = analisis["familias_detectadas"]
+            riesgo["detalle_reglas_relevantes"] = analisis["detalle_reglas"]
+            riesgo["severidad_minima_sugerida"] = analisis["severidad_minima_sugerida"]
+            riesgo["puntaje_agravante_relevante"] = analisis["puntaje_agravante_total"]
 
     # ------------------------------------------------
     # 7) Scoring audiovisual
@@ -243,15 +246,12 @@ def analizar_audiovisual(
         "perfil_original": perfil,
         "perfil_canonico": perfil_canonico,
         "modelo_utilizado": modelo_nombre,
-        "version_servicio": "4.1_audiovisual_json_unificado_parse_robusto"
+        "version_servicio": "4.2_audiovisual_reglas_relevantes"
     }
 
     # ------------------------------------------------
     # 9) Normalización final del JSON
     # ------------------------------------------------
-    # Este es el bloque clave:
-    # a partir de aquí se consolida una única salida autoritativa.
-    # El Word debe consumir este JSON y nada más.
     resultado = normalizar_respuesta_audiovisual(
         respuesta_modelo=resultado,
         texto_contrato=contrato
@@ -290,10 +290,8 @@ def ejecutar_analisis_audiovisual(data: dict) -> Dict:
     if not texto:
         raise ValueError("No se encontró texto del contrato para analizar.")
 
-    # Perfil por defecto para demo / main
     perfil = "tecnico"
 
-    # Configuración mínima requerida por analizar_audiovisual
     with spinner("   ⏳ Ejecutando análisis IA Audiovisual", "✔ Análisis completado"):
         resultado = analizar_audiovisual(
             contrato=texto,

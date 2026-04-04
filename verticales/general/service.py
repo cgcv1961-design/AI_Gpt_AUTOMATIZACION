@@ -2,7 +2,7 @@
 verticales/general/service.py
 
 Servicio de análisis para vertical GENERAL.
-Arquitectura híbrida estable v4.0
+Arquitectura híbrida estable v4.1
 
 Responsable de:
 - Normalizar perfil
@@ -12,7 +12,16 @@ Responsable de:
 - Limpiar JSON
 - Normalizar estructura (basico / tecnico)
 - Recalcular severidad (determinístico)
+- Guardar detalle auditable de reglas relevantes
 - Calcular scoring único
+
+MEJORA DE ESTA VERSIÓN
+----------------------
+La severidad ya no depende solo del clasificador básico.
+Ahora:
+- usa indicadores clásicos
+- usa reglas relevantes (penalidades, cesión IP, no competencia, etc.)
+- guarda detalle auditable por riesgo
 """
 
 import json
@@ -25,7 +34,10 @@ from config import CONFIG
 
 from verticales.general.prompts.prompt_general import construir_prompt_general
 from verticales.general.scoring import calcular_scoring_general
-from utils.clasificador_severidad import clasificar_severidad
+from utils.clasificador_severidad import (
+    clasificar_severidad,
+    analizar_severidad_detallada,
+)
 from utils.json_cleaner import limpiar_respuesta_modelo
 
 client = OpenAI()
@@ -93,6 +105,7 @@ def analizar_general(
 
     # ------------------------------------------------
     # 5️⃣ Recalcular severidad determinística
+    #     + guardar detalle auditable
     # ------------------------------------------------
     riesgos = (
         resultado.get("analisis_profesional", {})
@@ -102,7 +115,15 @@ def analizar_general(
     for categoria in riesgos.values():
         for riesgo in categoria:
             descripcion = riesgo.get("descripcion", "")
-            riesgo["severidad"] = clasificar_severidad(descripcion)
+
+            analisis = analizar_severidad_detallada(descripcion)
+
+            riesgo["severidad"] = analisis["severidad_final"]
+            riesgo["severidad_base"] = analisis["severidad_base"]
+            riesgo["familias_relevantes_detectadas"] = analisis["familias_detectadas"]
+            riesgo["detalle_reglas_relevantes"] = analisis["detalle_reglas"]
+            riesgo["severidad_minima_sugerida"] = analisis["severidad_minima_sugerida"]
+            riesgo["puntaje_agravante_relevante"] = analisis["puntaje_agravante_total"]
 
     # ------------------------------------------------
     # 6️⃣ Scoring único
@@ -118,7 +139,7 @@ def analizar_general(
         "perfil_original": perfil,
         "perfil_canonico": perfil_canonico,
         "modelo_utilizado": modelo_nombre,
-        "version_servicio": "4.0_general_unificado"
+        "version_servicio": "4.1_general_unificado_reglas_relevantes"
     }
 
     return resultado
@@ -177,6 +198,7 @@ def normalizar_estructura(resultado: Dict) -> Dict:
         "riesgos_clasificados": riesgos_normalizados
     }
     return resultado
+
 
 # =========================================================
 # ADAPTADOR PARA EL MOTOR PRINCIPAL
