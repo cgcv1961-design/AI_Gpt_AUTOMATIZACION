@@ -1,5 +1,6 @@
 """
 verticales/audiovisual/scoring_engine_productor.py
+--------------------------------------------------
 
 Motor de Scoring – Vertical Audiovisual – Perfil Productor
 
@@ -7,13 +8,24 @@ Este módulo aplica scoring sectorial especializado
 utilizando el núcleo matemático común del sistema.
 
 Arquitectura:
-
-- Capa 1 → Score por riesgos individuales (core)
+- Capa 1 → Score por riesgos individuales
 - Capa 2 → Penalizaciones estructurales sectoriales
 - Capa 3 → Detección de riesgo estructural combinado
 - Capa 4 → Determinación de nivel (sectorial)
 
-Versión Motor: 3.0_aud_productor_core_unificado
+MEJORA DE ESTA VERSIÓN
+----------------------
+Se alinea el motor audiovisual con la escala ampliada de severidades:
+- baja
+- media
+- media-alta
+- alta
+- critica
+
+Además:
+- se agregan métricas explícitas para riesgos críticos
+- se mantiene intacta la lógica sectorial ya validada
+- no se altera la arquitectura del bloque `evaluacion_general`
 """
 
 from typing import Dict
@@ -28,18 +40,24 @@ from core.utils_semanticos import (
 # VERSIONADO DEL MOTOR
 # =========================================================
 
-ALGORITMO_SCORING_VERSION = "3.2_aud_productor_umbral_sectorial"
+ALGORITMO_SCORING_VERSION = "3.3_aud_productor_alineado_reglas_relevantes"
 
 # =========================================================
 # PESOS SECTORIALES
+# =========================================================
+# Alineados con la nueva escala de severidad.
+# No se tocan umbrales de nivel cualitativo porque ya fueron
+# calibrados sectorialmente en pruebas previas.
 # =========================================================
 
 PESOS_SEVERIDAD_AUD = {
     "baja": 1,
     "media": 3,
+    "media-alta": 5,
     "alta": 6,
     "critica": 10
 }
+
 
 # =========================================================
 # CAPA 2 — Penalizaciones estructurales sectoriales
@@ -212,10 +230,11 @@ def aplicar_scoring_aud_productor(resultado: Dict) -> Dict:
     # BLOQUE ESTÁNDAR DEL SISTEMA
     # -----------------------------------------------------
 
-    severidades = [r.get("severidad", "").lower() for r in riesgos]
+    severidades = [str(r.get("severidad", "")).lower() for r in riesgos]
 
     metricas = {
         "cantidad_riesgos": len(riesgos),
+        "riesgos_criticos": severidades.count("critica"),
         "riesgos_altos": severidades.count("alta"),
         "riesgos_media_altos": severidades.count("media-alta"),
         "riesgos_medios": severidades.count("media"),
