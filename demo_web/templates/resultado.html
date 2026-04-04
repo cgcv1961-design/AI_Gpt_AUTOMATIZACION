@@ -226,7 +226,8 @@
             border: 1px solid #f3c9a6;
         }
 
-        .risk-alto {
+        .risk-alto,
+        .risk-critico {
             background: var(--risk-high-bg);
             color: var(--risk-high);
             border: 1px solid #f0b8b8;
@@ -260,7 +261,7 @@
 
         .resumen-text {
             font-size: 14px;
-            line-height: 1.55;
+            line-height: 1.6;
             color: var(--text);
             white-space: pre-wrap;
         }
@@ -406,18 +407,37 @@
     {% elif riesgo == "alto" %}
         {% set resumen_score = "Interpretación: riesgo alto." %}
         {% set explicacion_riesgo = "El contrato presenta una exposición elevada y requiere revisión prioritaria, ya que contiene cláusulas con potencial impacto significativo." %}
+    {% elif riesgo == "critico" %}
+        {% set resumen_score = "Interpretación: riesgo crítico." %}
+        {% set explicacion_riesgo = "El contrato presenta una exposición extremadamente elevada y requiere revisión inmediata antes de cualquier avance." %}
     {% else %}
         {% set resumen_score = "Interpretación automática basada en el scoring del sistema." %}
         {% set explicacion_riesgo = interpretacion_score if interpretacion_score is defined and interpretacion_score else "El score es una medida numérica del riesgo total del contrato." %}
     {% endif %}
 
     {% set partes_visibles = partes_con_rol if partes_con_rol is defined and partes_con_rol else partes %}
-    {% set resumen_web = "" %}
 
-    {% if tipo_contrato and rol_detectado_final != "Parte analizada" %}
-        {% set resumen_web = "El contrato muestra " ~ (nivel_riesgo or "riesgo no determinado") | lower ~ " y se analiza desde el rol " ~ rol_detectado_final ~ "." %}
+    {# ----------------------------------------------------- #}
+    {# LECTURA RÁPIDA MEJORADA                              #}
+    {# Usa la interpretación ejecutiva si existe, y si no   #}
+    {# arma una síntesis con información útil.              #}
+    {# ----------------------------------------------------- #}
+
+    {% set resumen_web = "" %}
+    {% set interpretacion_limpia = interpretacion_ejecutiva if interpretacion_ejecutiva is defined and interpretacion_ejecutiva else "" %}
+
+    {% if interpretacion_limpia %}
+        {% set resumen_web = interpretacion_limpia %}
     {% else %}
-        {% set resumen_web = "El contrato presenta " ~ (nivel_riesgo or "riesgo no determinado") | lower ~ " y conviene revisar las cláusulas principales antes de firmar." %}
+        {% if riesgo == "alto" or riesgo == "critico" %}
+            {% set resumen_web = "El contrato presenta un nivel de riesgo alto para la parte analizada y conviene revisar prioritariamente las cláusulas con mayor impacto jurídico, económico u operativo antes de firmar." %}
+        {% elif riesgo == "medio-alto" %}
+            {% set resumen_web = "El contrato presenta un nivel de riesgo medio-alto para la parte analizada y merece una revisión cuidadosa de las cláusulas más sensibles antes de avanzar." %}
+        {% elif riesgo == "medio" %}
+            {% set resumen_web = "El contrato presenta un nivel de riesgo medio para la parte analizada y conviene revisar especialmente los puntos que puedan generar exposición jurídica, económica u operativa." %}
+        {% else %}
+            {% set resumen_web = "El contrato presenta un nivel de riesgo relativamente contenido, aunque igualmente conviene revisar sus cláusulas principales antes de firmar." %}
+        {% endif %}
     {% endif %}
 
     <div class="wrapper">
@@ -503,7 +523,7 @@
                 <div class="mini-guide">
                     <h3>Cómo leer este resultado</h3>
                     <p><strong>1.</strong> El <strong>score</strong> muestra una medida numérica del riesgo total del contrato.</p>
-                    <p><strong>2.</strong> El <strong>nivel de riesgo</strong> traduce ese score a una lectura simple: bajo, medio, medio-alto o alto.</p>
+                    <p><strong>2.</strong> El <strong>nivel de riesgo</strong> traduce ese score a una lectura simple: bajo, medio, medio-alto, alto o crítico.</p>
                     <p><strong>3.</strong> Las <strong>partes</strong> y el <strong>rol contractual detectado</strong> indican desde qué lado se interpreta el contrato.</p>
                 </div>
 

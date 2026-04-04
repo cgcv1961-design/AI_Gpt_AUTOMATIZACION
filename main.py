@@ -12,19 +12,19 @@ Normalizar correctamente:
 - roles contractuales visibles
 - nombres de partes para UI y Word
 
-MEJORA PRINCIPAL DE ESTA VERSIÓN
---------------------------------
-Se agrega una limpieza automática del campo:
+MEJORAS PRINCIPALES DE ESTA VERSIÓN
+-----------------------------------
+1. Se agrega una limpieza automática del campo:
     informe_cliente.resumen_ejecutivo.vision_general
 
-Esto permite eliminar aperturas redundantes del tipo:
-- "Este contrato se analiza desde la perspectiva..."
-- "Rol contractual detectado: ..."
+   Esto permite eliminar aperturas redundantes del tipo:
+   - "Este contrato se analiza desde la perspectiva..."
+   - "Rol contractual detectado: ..."
 
-La idea es que el resumen ejecutivo:
-- entre directo al riesgo
-- sea más útil para cliente final
-- no repita información que ya aparece antes en el informe
+2. Se agrega limpieza menor de puntuación para evitar defectos como:
+   - "Cliente.;"
+   - "relación.."
+   - espacios innecesarios antes de signos
 
 IMPORTANTE
 ----------
@@ -150,6 +150,105 @@ def construir_texto_desde_lista(lista: List[str], max_items: int = 3) -> str:
     if not items:
         return ""
     return "; ".join(items[:max_items])
+
+
+# =========================================================
+# LIMPIEZA DE PUNTUACIÓN
+# =========================================================
+
+def limpiar_puntuacion_texto(texto: str) -> str:
+    """
+    Limpia pequeños defectos de puntuación generados por ensamblado de texto.
+
+    Ejemplos que corrige:
+    - Cliente.;
+    - relación..
+    - texto .
+    - texto ;.
+    """
+    texto = texto_limpio(texto, default="")
+    if not texto:
+        return texto
+
+    # Normalizar espacios
+    texto = re.sub(r"\s+", " ", texto)
+
+    # Quitar espacios antes de signos
+    texto = re.sub(r"\s+([.,;:])", r"\1", texto)
+
+    # Corregir combinaciones raras de puntuación
+    texto = re.sub(r"\.\.+", ".", texto)      # .. -> .
+    texto = re.sub(r";\.+", ".", texto)       # ;. -> .
+    texto = re.sub(r"\.\;+",";", texto)       # .; -> ;
+    texto = re.sub(r",\.+", ".", texto)       # ,. -> .
+    texto = re.sub(r":\.+", ".", texto)       # :. -> .
+
+    return texto.strip()
+
+
+def limpiar_lista_textos(lista: Any) -> Any:
+    """
+    Limpia una lista de strings sin romper otros tipos de datos.
+    """
+    if not isinstance(lista, list):
+        return lista
+
+    salida = []
+    for item in lista:
+        if isinstance(item, str):
+            salida.append(limpiar_puntuacion_texto(item))
+        else:
+            salida.append(item)
+    return salida
+
+
+def limpiar_textos_informe(resultado: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Limpia puntuación menor en los textos principales del JSON final.
+
+    Aplica tanto a GENERAL como a AUDIOVISUAL, sin alterar la estructura.
+    """
+    if not isinstance(resultado, dict):
+        return resultado
+
+    informe_cliente = resultado.get("informe_cliente", {}) or {}
+    resumen = informe_cliente.get("resumen_ejecutivo", {}) or {}
+    detalle = informe_cliente.get("informe_detallado", {}) or {}
+
+    # Resumen ejecutivo
+    for campo in [
+        "vision_general",
+        "nivel_riesgo_global",
+        "recomendacion_estrategica_final",
+        "recomendacion_profesional",
+    ]:
+        if isinstance(resumen.get(campo), str):
+            resumen[campo] = limpiar_puntuacion_texto(resumen[campo])
+
+    # Listas del resumen
+    if "puntos_criticos" in resumen:
+        resumen["puntos_criticos"] = limpiar_lista_textos(resumen["puntos_criticos"])
+
+    # Informe detallado
+    for campo in [
+        "conclusion_profesional",
+    ]:
+        if isinstance(detalle.get(campo), str):
+            detalle[campo] = limpiar_puntuacion_texto(detalle[campo])
+
+    for campo_lista in [
+        "hallazgos_principales",
+        "implicancias_estrategicas_mediano_plazo",
+        "preguntas_clave_antes_de_firmar",
+    ]:
+        if campo_lista in detalle:
+            detalle[campo_lista] = limpiar_lista_textos(detalle[campo_lista])
+
+    informe_cliente["resumen_ejecutivo"] = resumen
+    informe_cliente["informe_detallado"] = detalle
+    resultado["informe_cliente"] = informe_cliente
+
+    return resultado
 
 
 # =========================================================
@@ -422,7 +521,6 @@ def limpiar_apertura_resumen_ejecutivo(texto: str) -> str:
     for patron in patrones:
         texto_limpio_final = re.sub(patron, "", texto_limpio_final, flags=re.IGNORECASE)
 
-    # Si quedaron ambos bloques juntos por haber sido generados en una sola frase, hacemos una pasada extra.
     texto_limpio_final = re.sub(
         r"Rol\s+contractual\s+detectado:\s*[^.]+\.\s*",
         "",
@@ -430,10 +528,8 @@ def limpiar_apertura_resumen_ejecutivo(texto: str) -> str:
         flags=re.IGNORECASE
     )
 
-    # Ajuste de espacios
     texto_limpio_final = re.sub(r"\s+", " ", texto_limpio_final).strip()
 
-    # Si por alguna razón quedó vacío, devolvemos el original para no romper la salida
     return texto_limpio_final if texto_limpio_final else texto
 
 
@@ -544,11 +640,19 @@ def ajustar_resultado_a_perspectiva(resultado: Dict[str, Any], perspectiva: str)
     detalle["conclusion_profesional"] = nueva_conclusion
 
     # -----------------------------------------------------
-    # LIMPIEZA FINAL DEL RESUMEN EJECUTIVO
-    # Acá eliminamos la redundancia aunque el modelo la haya generado.
+    # LIMPIEZA FINAL
     # -----------------------------------------------------
     resumen["vision_general"] = limpiar_apertura_resumen_ejecutivo(
         texto_limpio(resumen.get("vision_general"), default="")
+    )
+
+    # Limpieza de puntuación menor
+    resumen["vision_general"] = limpiar_puntuacion_texto(resumen.get("vision_general", ""))
+    resumen["recomendacion_estrategica_final"] = limpiar_puntuacion_texto(
+        resumen.get("recomendacion_estrategica_final", "")
+    )
+    detalle["conclusion_profesional"] = limpiar_puntuacion_texto(
+        detalle.get("conclusion_profesional", "")
     )
 
     informe_cliente["resumen_ejecutivo"] = resumen
@@ -639,6 +743,9 @@ def ejecutar_motor(
 
     if vertical == "GENERAL":
         resultado = ajustar_resultado_a_perspectiva(resultado, perspectiva=perspectiva)
+
+    # Limpieza final transversal para GENERAL y AUDIOVISUAL
+    resultado = limpiar_textos_informe(resultado)
 
     ruta_output_json = guardar_reporte_json(resultado, ruta_json)
     print(f"\n📄 Reporte JSON guardado en: {ruta_output_json}")
