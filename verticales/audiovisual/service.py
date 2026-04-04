@@ -14,7 +14,7 @@ Este módulo:
 4. Ejecuta el modelo de IA.
 5. Extrae y parsea el JSON devuelto por el modelo.
 6. Recalcula severidad de forma determinística.
-7. Aplica scoring específico de la vertical.
+7. Aplica scoring audiovisual alineado con el motor unificado.
 8. Normaliza la salida final a un JSON único y rico.
 9. Expone un adaptador estándar para integrarse con main.py,
    demo y API.
@@ -30,12 +30,13 @@ Esto significa que:
 
 MEJORA DE ESTA VERSIÓN
 ----------------------
-La severidad audiovisual también pasa a guardar:
-- severidad base
-- familias relevantes detectadas
-- detalle auditable de reglas relevantes
+La vertical audiovisual deja de depender de una lógica de scoring aislada
+y pasa a apoyarse en un motor alineado con la arquitectura nueva del sistema.
 
-Sin reemplazar su scoring específico.
+Esto permite:
+- mayor consistencia entre vertical GENERAL y AUDIOVISUAL
+- coherencia entre severidad del contrato y riesgo para la parte analizada
+- menor duplicación de lógica
 """
 
 import json
@@ -44,13 +45,10 @@ from typing import Dict, Any
 from openai import OpenAI
 
 from config import CONFIG
-from utils.clasificador_severidad import (
-    clasificar_severidad,
-    analizar_severidad_detallada,
-)
+from utils.clasificador_severidad import analizar_severidad_detallada
 from utils.progreso import spinner
 from verticales.audiovisual.prompts_aud import construir_prompt_audiovisual
-from verticales.audiovisual.scoring_engine_productor import aplicar_scoring_aud_productor
+from verticales.audiovisual.scoring_engine_productor import calcular_scoring_productor
 from verticales.audiovisual.schema.aud_v1_2_productor import normalizar_respuesta_audiovisual
 
 
@@ -135,6 +133,37 @@ def _extraer_json_valido(texto: str) -> Dict[str, Any]:
         "No se pudo extraer JSON válido del modelo.\n"
         f"Respuesta:\n{texto[:500]}"
     )
+
+
+def _detectar_rol_analizado_audiovisual(resultado: Dict[str, Any]) -> str:
+    """
+    Intenta inferir el rol analizado en audiovisual a partir de las partes.
+
+    Regla práctica inicial:
+    - si encuentra 'artista' en la segunda parte, devuelve 'Artista'
+    - si encuentra 'productora' o 'productor', devuelve ese rol
+    - por defecto devuelve 'Artista', porque en la mayoría de las pruebas
+      actuales el análisis audiovisual se ha interpretado desde ese lado
+    """
+    partes = (
+        resultado.get("nucleo_contractual", {})
+                .get("partes", [])
+    )
+
+    if isinstance(partes, list):
+        for parte in partes:
+            parte_txt = str(parte).lower()
+
+            if "el artista" in parte_txt or "artista" in parte_txt or "intérprete" in parte_txt or "interprete" in parte_txt:
+                return "Artista"
+
+            if "la productora" in parte_txt or "productora" in parte_txt:
+                return "Productora"
+
+            if "productor" in parte_txt:
+                return "Productor"
+
+    return "Artista"
 
 
 def analizar_audiovisual(
@@ -234,28 +263,41 @@ def analizar_audiovisual(
             riesgo["puntaje_agravante_relevante"] = analisis["puntaje_agravante_total"]
 
     # ------------------------------------------------
-    # 7) Scoring audiovisual
+    # 7) Normalización intermedia del JSON
     # ------------------------------------------------
-    resultado = aplicar_scoring_aud_productor(resultado)
+    # La hacemos antes del scoring para disponer de una estructura
+    # más uniforme y con partes claramente visibles.
+    resultado = normalizar_respuesta_audiovisual(
+        respuesta_modelo=resultado,
+        texto_contrato=contrato
+    )
 
     # ------------------------------------------------
-    # 8) Metadata técnica
+    # 8) Detección del rol analizado
+    # ------------------------------------------------
+    rol_analizado = _detectar_rol_analizado_audiovisual(resultado)
+
+    # ------------------------------------------------
+    # 9) Scoring audiovisual alineado
+    # ------------------------------------------------
+    # Se delega en scoring_engine_productor.py, que ahora debe actuar
+    # como wrapper/adaptador del motor unificado.
+    resultado = calcular_scoring_productor(
+        resultado=resultado,
+        rol_analizado=rol_analizado
+    )
+
+    # ------------------------------------------------
+    # 10) Metadata técnica
     # ------------------------------------------------
     resultado["metadata_sistema"] = {
         "vertical": "audiovisual",
         "perfil_original": perfil,
         "perfil_canonico": perfil_canonico,
         "modelo_utilizado": modelo_nombre,
-        "version_servicio": "4.2_audiovisual_reglas_relevantes"
+        "rol_detectado_interno": rol_analizado,
+        "version_servicio": "4.4_audiovisual_scoring_alineado"
     }
-
-    # ------------------------------------------------
-    # 9) Normalización final del JSON
-    # ------------------------------------------------
-    resultado = normalizar_respuesta_audiovisual(
-        respuesta_modelo=resultado,
-        texto_contrato=contrato
-    )
 
     return resultado
 

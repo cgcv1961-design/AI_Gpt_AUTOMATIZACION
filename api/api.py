@@ -6,8 +6,18 @@ API y demo web mínima para análisis contractual autónomo.
 
 OBJETIVO DE ESTA VERSIÓN
 ------------------------
-Alinear la UI con la metadata de presentación generada por main.py,
-evitando que lleguen a pantalla representaciones crudas de dicts.
+Alinear la UI con:
+- metadata de presentación generada por main.py
+- nueva separación entre:
+    1. severidad del contrato
+    2. riesgo para la parte analizada
+    3. riesgo para la contraparte
+
+MEJORAS PRINCIPALES
+-------------------
+1. Se mantiene compatibilidad con salidas anteriores.
+2. Se exponen al template resultado.html los nuevos campos de scoring dual.
+3. Se conserva la lógica defensiva para evitar errores si faltan campos.
 """
 
 import html
@@ -37,6 +47,10 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 os.makedirs(TEMP_UPLOADS_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+
+# =========================================================
+# HELPERS HTML DEBUG
+# =========================================================
 
 def html_debug_page(titulo: str, contenido: str) -> HTMLResponse:
     return HTMLResponse(
@@ -92,6 +106,10 @@ def html_debug_page(titulo: str, contenido: str) -> HTMLResponse:
     )
 
 
+# =========================================================
+# HELPERS GENERALES
+# =========================================================
+
 def cargar_json_generado(ruta_json_output: str) -> dict:
     try:
         with open(ruta_json_output, "r", encoding="utf-8") as f:
@@ -132,8 +150,14 @@ def formatear_parte_visible(parte: Any) -> str:
     Si llega un dict, lo convierte en texto visible.
     """
     if isinstance(parte, dict):
-        nombre = texto_limpio(parte.get("nombre") or parte.get("parte") or parte.get("name"), default="-")
-        rol = texto_limpio(parte.get("rol") or parte.get("tipo") or parte.get("role"), default="")
+        nombre = texto_limpio(
+            parte.get("nombre") or parte.get("parte") or parte.get("name"),
+            default="-"
+        )
+        rol = texto_limpio(
+            parte.get("rol") or parte.get("tipo") or parte.get("role"),
+            default=""
+        )
         if nombre != "-" and rol:
             return f"{nombre} ({rol})"
         if nombre != "-":
@@ -178,6 +202,10 @@ def normalizar_pais_entrada(valor: str) -> str:
     return mapa.get(texto, "internacional")
 
 
+# =========================================================
+# HELPERS DE NEGOCIO
+# =========================================================
+
 def obtener_tipo_contrato(data: dict, resumen: dict) -> str:
     nucleo = data.get("nucleo_contractual", {}) or {}
     return texto_limpio(nucleo.get("tipo_contrato") or resumen.get("tipo_contrato"), default="-")
@@ -203,6 +231,10 @@ def obtener_interpretacion_ejecutiva(data: dict, resumen: dict) -> str:
 
 
 def obtener_score_total(data: dict, resumen: dict) -> float:
+    """
+    Compatibilidad legacy:
+    hoy el score_total sigue representando la severidad del contrato.
+    """
     scoring = data.get("scoring", {}) or {}
     valor = scoring.get("score_total") or resumen.get("score_total") or 0
 
@@ -213,6 +245,10 @@ def obtener_score_total(data: dict, resumen: dict) -> float:
 
 
 def obtener_nivel_riesgo(data: dict, resumen: dict) -> str:
+    """
+    Compatibilidad legacy:
+    hoy nivel_riesgo sigue representando la severidad del contrato.
+    """
     scoring = data.get("scoring", {}) or {}
     return texto_limpio(scoring.get("nivel_riesgo") or resumen.get("nivel_riesgo"), default="-")
 
@@ -273,18 +309,23 @@ def obtener_roles_partes(partes: List[str]) -> Tuple[str, str]:
 
 
 def interpretar_score_desde_nivel(nivel_riesgo: str) -> str:
+    """
+    Interpretación legacy de severidad contractual.
+    """
     nivel = (nivel_riesgo or "").strip().lower()
 
     if nivel == "bajo":
-        return "Riesgo bajo: el contrato presenta una exposición relativamente contenida, aunque igualmente conviene revisar sus cláusulas relevantes antes de firmar."
+        return "Severidad contractual baja: el contrato presenta una intensidad relativamente contenida, aunque igualmente conviene revisar sus cláusulas relevantes antes de firmar."
     elif nivel == "medio":
-        return "Riesgo medio: existen cláusulas u obligaciones que requieren revisión antes de firmar."
+        return "Severidad contractual media: existen cláusulas u obligaciones que requieren revisión antes de firmar."
     elif nivel == "medio-alto":
-        return "Riesgo medio-alto: el contrato presenta una exposición importante y merece una revisión cuidadosa antes de su firma o negociación."
+        return "Severidad contractual medio-alta: el contrato presenta una intensidad importante y merece una revisión cuidadosa antes de su firma o negociación."
     elif nivel == "alto":
-        return "Riesgo alto: el contrato puede resultar significativamente desfavorable y exige revisión prioritaria."
+        return "Severidad contractual alta: el contrato puede resultar significativamente exigente o litigioso y exige revisión prioritaria."
+    elif nivel == "critico":
+        return "Severidad contractual crítica: el contrato concentra cláusulas especialmente intensas y conviene revisarlo de inmediato antes de avanzar."
 
-    return "El score es una medida numérica del riesgo total del contrato. Cuanto mayor es el valor, mayor es la exposición al riesgo."
+    return "El score es una medida numérica de la severidad global del contrato. Cuanto mayor es el valor, mayor es la intensidad contractual detectada."
 
 
 def obtener_metadata_presentacion(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -308,9 +349,80 @@ def obtener_metadata_presentacion(data: Dict[str, Any]) -> Dict[str, Any]:
             presentacion.get("nombre_parte_analizada"),
             default="-"
         ),
-        "partes_con_rol": [formatear_parte_visible(x) for x in partes_con_rol if formatear_parte_visible(x) != "-"],
+        "partes_con_rol": [
+            formatear_parte_visible(x)
+            for x in partes_con_rol
+            if formatear_parte_visible(x) != "-"
+        ],
     }
 
+
+# =========================================================
+# NUEVOS HELPERS DE SCORING DUAL
+# =========================================================
+
+def obtener_scoring_dual(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Devuelve el bloque scoring ya normalizado para la UI.
+
+    Mantiene compatibilidad con archivos viejos:
+    si faltan los nuevos bloques, usa score_total / nivel_riesgo legacy.
+    """
+    scoring = data.get("scoring", {}) or {}
+
+    severidad_contrato = scoring.get("severidad_contrato", {}) or {}
+    riesgo_parte = scoring.get("riesgo_parte_analizada", {}) or {}
+    riesgo_contraparte = scoring.get("riesgo_contraparte", {}) or {}
+
+    score_legacy = scoring.get("score_total", 0)
+    nivel_legacy = scoring.get("nivel_riesgo", "-")
+
+    try:
+        score_legacy = float(score_legacy)
+    except (TypeError, ValueError):
+        score_legacy = 0.0
+
+    def _float_seguro(valor, default=0.0):
+        try:
+            return float(valor)
+        except (TypeError, ValueError):
+            return default
+
+    return {
+        "severidad_contrato_score": _float_seguro(
+            severidad_contrato.get("score"),
+            default=score_legacy
+        ),
+        "severidad_contrato_nivel": texto_limpio(
+            severidad_contrato.get("nivel"),
+            default=nivel_legacy
+        ),
+        "riesgo_parte_score": _float_seguro(
+            riesgo_parte.get("score"),
+            default=score_legacy
+        ),
+        "riesgo_parte_nivel": texto_limpio(
+            riesgo_parte.get("nivel"),
+            default=nivel_legacy
+        ),
+        "riesgo_contraparte_score": _float_seguro(
+            riesgo_contraparte.get("score"),
+            default=score_legacy
+        ),
+        "riesgo_contraparte_nivel": texto_limpio(
+            riesgo_contraparte.get("nivel"),
+            default=nivel_legacy
+        ),
+        "rol_contraparte": texto_limpio(
+            riesgo_contraparte.get("rol"),
+            default="Contraparte"
+        ),
+    }
+
+
+# =========================================================
+# ROUTES
+# =========================================================
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
@@ -407,14 +519,20 @@ async def analizar(
         tipo_contrato = obtener_tipo_contrato(data, resumen)
         cantidad_riesgos = obtener_cantidad_riesgos(data, resumen)
         interpretacion_ejecutiva = obtener_interpretacion_ejecutiva(data, resumen)
+
+        # legacy
         score_total = obtener_score_total(data, resumen)
         nivel_riesgo = obtener_nivel_riesgo(data, resumen)
+        interpretacion_score = interpretar_score_desde_nivel(nivel_riesgo)
+
+        # nuevo scoring dual
+        scoring_dual = obtener_scoring_dual(data)
+
         pais_referencia_final = obtener_pais_referencia(data, resumen)
 
         partes = extraer_partes_desde_json(data, resumen)
         parte_cliente, parte_proveedor = obtener_roles_partes(partes)
 
-        interpretacion_score = interpretar_score_desde_nivel(nivel_riesgo)
         metadata_presentacion = obtener_metadata_presentacion(data)
 
         return templates.TemplateResponse(
@@ -426,9 +544,21 @@ async def analizar(
                 "tipo_contrato": tipo_contrato,
                 "cantidad_riesgos": cantidad_riesgos,
                 "interpretacion_ejecutiva": interpretacion_ejecutiva,
+
+                # legacy
                 "score_total": score_total,
                 "nivel_riesgo": nivel_riesgo,
                 "interpretacion_score": interpretacion_score,
+
+                # nuevo scoring dual
+                "severidad_contrato_score": scoring_dual["severidad_contrato_score"],
+                "severidad_contrato_nivel": scoring_dual["severidad_contrato_nivel"],
+                "riesgo_parte_score": scoring_dual["riesgo_parte_score"],
+                "riesgo_parte_nivel": scoring_dual["riesgo_parte_nivel"],
+                "riesgo_contraparte_score": scoring_dual["riesgo_contraparte_score"],
+                "riesgo_contraparte_nivel": scoring_dual["riesgo_contraparte_nivel"],
+                "rol_contraparte": scoring_dual["rol_contraparte"],
+
                 "partes": partes,
                 "partes_con_rol": metadata_presentacion.get("partes_con_rol", []),
                 "parte_cliente": parte_cliente,

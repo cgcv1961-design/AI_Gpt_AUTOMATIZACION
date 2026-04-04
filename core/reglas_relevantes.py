@@ -24,7 +24,7 @@ La complementa de forma auditable y explícita.
 USO ESPERADO
 ------------
 Este módulo será consumido por:
-    core/scoring_engine.py
+    utils/clasificador_severidad.py
 
 SALIDA PRINCIPAL
 ----------------
@@ -51,12 +51,8 @@ Además:
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-
-# =========================================================
-# CONFIGURACIÓN BASE
-# =========================================================
 
 ORDEN_SEVERIDAD = {
     "baja": 1,
@@ -74,15 +70,6 @@ SEVERIDAD_POR_ORDEN = {
     5: "critica",
 }
 
-
-# =========================================================
-# UMBRALES MONETARIOS
-# =========================================================
-# NOTA:
-# Estos umbrales no intentan ser "económicamente perfectos".
-# Son reglas iniciales, auditables y calibrables, pensadas
-# para disparar alertas razonables ante penalidades elevadas.
-# =========================================================
 
 UMBRALES_MONETARIOS = {
     "USD": {
@@ -103,10 +90,6 @@ UMBRALES_MONETARIOS = {
     },
 }
 
-
-# =========================================================
-# FAMILIAS DE RIESGO RELEVANTE
-# =========================================================
 
 REGLAS_RELEVANTES = {
     "penalidad_fuerte": {
@@ -129,6 +112,8 @@ REGLAS_RELEVANTES = {
             "independiente de daños",
             "líquida",
             "liquida",
+            "exigible sin discusión",
+            "exigible sin discusion",
         ],
         "requiere_monto": True,
         "severidad_minima": "media-alta",
@@ -164,6 +149,7 @@ REGLAS_RELEVANTES = {
             "desarrollos futuros",
             "exclusivos",
             "exclusiva",
+            "titularidad exclusiva",
         ],
         "requiere_monto": False,
         "severidad_minima": "alta",
@@ -189,6 +175,8 @@ REGLAS_RELEVANTES = {
             "postcontractual",
             "finalizada la relación",
             "finalizada la relacion",
+            "larga duración",
+            "larga duracion",
         ],
         "requiere_monto": False,
         "severidad_minima": "media",
@@ -220,30 +208,17 @@ REGLAS_RELEVANTES = {
 }
 
 
-# =========================================================
-# HELPERS GENERALES
-# =========================================================
-
 def normalizar_texto(texto: str) -> str:
-    """
-    Normaliza el texto para búsquedas simples.
-    """
     texto = (texto or "").lower().strip()
     texto = re.sub(r"\s+", " ", texto)
     return texto
 
 
 def contiene_termino(texto: str, termino: str) -> bool:
-    """
-    Busca coincidencia simple por substring normalizado.
-    """
     return termino.lower() in texto
 
 
 def severidad_mayor(a: Optional[str], b: Optional[str]) -> Optional[str]:
-    """
-    Devuelve la severidad más alta entre dos valores.
-    """
     if not a:
         return b
     if not b:
@@ -255,28 +230,10 @@ def severidad_mayor(a: Optional[str], b: Optional[str]) -> Optional[str]:
     return a if oa >= ob else b
 
 
-# =========================================================
-# DETECCIÓN MONETARIA
-# =========================================================
-
 def extraer_numeros_candidatos(texto: str) -> List[float]:
-    """
-    Extrae números candidatos desde el texto.
-
-    Soporta formatos como:
-    - 2.000.000
-    - 2,000,000
-    - 2000000
-    - 100.000
-    - 100,000
-
-    Para simplificar la lógica:
-    - eliminamos separadores de miles
-    - convertimos a float
-    """
     patrones = [
-        r"\b\d{1,3}(?:[.,]\d{3})+\b",  # 2.000.000 / 2,000,000
-        r"\b\d{5,}\b",                 # 100000 o más
+        r"\b\d{1,3}(?:[.,]\d{3})+\b",
+        r"\b\d{5,}\b",
     ]
 
     encontrados = []
@@ -298,15 +255,6 @@ def extraer_numeros_candidatos(texto: str) -> List[float]:
 
 
 def detectar_moneda(texto: str) -> Optional[str]:
-    """
-    Detecta la moneda predominante en el texto.
-
-    Orden de prioridad:
-    - USD
-    - EUR
-    - ARS
-    - UYU
-    """
     texto = normalizar_texto(texto)
 
     patrones_moneda = {
@@ -324,17 +272,6 @@ def detectar_moneda(texto: str) -> Optional[str]:
 
 
 def clasificar_monto_por_moneda(texto: str) -> Dict:
-    """
-    Detecta si el texto contiene un monto monetario relevante o alto.
-
-    Devuelve:
-    - moneda_detectada
-    - valor_detectado
-    - es_relevante
-    - es_alto
-
-    Si no detecta moneda o número suficiente, devuelve flags en False.
-    """
     texto_norm = normalizar_texto(texto)
     moneda = detectar_moneda(texto_norm)
     numeros = extraer_numeros_candidatos(texto_norm)
@@ -369,22 +306,7 @@ def clasificar_monto_por_moneda(texto: str) -> Dict:
     }
 
 
-# =========================================================
-# MOTOR DE REGLAS RELEVANTES
-# =========================================================
-
 def evaluar_reglas_relevantes(texto: str) -> Dict:
-    """
-    Analiza el texto de descripción del riesgo y devuelve:
-    - familias detectadas
-    - puntaje agravante
-    - severidad mínima sugerida
-    - detalle auditable
-
-    Esto permite que el scoring determinista:
-    - vea términos jurídicamente sensibles
-    - no dependa solo de la severidad original
-    """
     texto_norm = normalizar_texto(texto)
 
     familias_detectadas: List[str] = []
@@ -421,8 +343,6 @@ def evaluar_reglas_relevantes(texto: str) -> Dict:
 
         severidad_regla = regla["severidad_minima"]
 
-        # Si la familia requiere monto y además el monto detectado es alto,
-        # reforzamos todavía más la severidad mínima sugerida.
         if regla.get("requiere_monto", False) and info_monto["es_alto"]:
             severidad_regla = severidad_mayor(severidad_regla, "alta")
 

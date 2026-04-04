@@ -25,8 +25,6 @@ DISEÑO
 3. Se toma la severidad más alta entre:
    - severidad base
    - severidad mínima sugerida por reglas relevantes
-
-Esto permite mejorar la detección sin romper la arquitectura actual.
 """
 
 import json
@@ -35,10 +33,6 @@ from typing import Dict, Optional
 
 from core.reglas_relevantes import evaluar_reglas_relevantes, ORDEN_SEVERIDAD
 
-
-# ------------------------------------------------
-# 1️⃣ Carga externa de indicadores
-# ------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RUTA_REGLAS = os.path.join(BASE_DIR, "indicadores_severidad.json")
@@ -52,12 +46,7 @@ def cargar_indicadores():
 INDICADORES = cargar_indicadores()
 
 
-# ------------------------------------------------
-# 2️⃣ Evaluador de reglas clásicas
-# ------------------------------------------------
-
 def cumple_regla(texto: str, regla: dict) -> bool:
-
     if regla["tipo"] == "frase":
         return regla["contiene"] in texto
 
@@ -67,39 +56,25 @@ def cumple_regla(texto: str, regla: dict) -> bool:
     return False
 
 
-# ------------------------------------------------
-# 3️⃣ Severidad base (clasificador clásico)
-# ------------------------------------------------
-
 def _clasificar_severidad_base(descripcion: str) -> str:
-    """
-    Clasificación jerárquica clásica basada en indicadores_severidad.json.
-    """
     texto = (descripcion or "").lower()
 
-    # 🔴 Alta
     for regla in INDICADORES["alta"]["reglas"]:
         if cumple_regla(texto, regla):
             return "alta"
 
-    # 🟠 Media-Alta
     for regla in INDICADORES["media-alta"]["reglas"]:
         if cumple_regla(texto, regla):
             return "media-alta"
 
-    # 🟡 Media
     for regla in INDICADORES["media"]["reglas"]:
         if cumple_regla(texto, regla):
             return "media"
 
-    # 🟢 Baja
     return "baja"
 
 
 def _severidad_mayor(a: Optional[str], b: Optional[str]) -> str:
-    """
-    Devuelve la severidad más alta entre dos valores.
-    """
     if not a and not b:
         return "baja"
     if not a:
@@ -113,21 +88,24 @@ def _severidad_mayor(a: Optional[str], b: Optional[str]) -> str:
     return a if oa >= ob else b
 
 
-# ------------------------------------------------
-# 4️⃣ API DETALLADA NUEVA
-# ------------------------------------------------
+def clasificar_nivel(score: float) -> str:
+    """
+    Clasificador simple de nivel a partir de score numérico.
+    Se usa para la capa de scoring dual.
+    """
+    if score < 10:
+        return "bajo"
+    elif score < 25:
+        return "medio"
+    elif score < 40:
+        return "medio-alto"
+    elif score < 60:
+        return "alto"
+    else:
+        return "critico"
+
 
 def analizar_severidad_detallada(descripcion: str) -> Dict:
-    """
-    Devuelve análisis completo de severidad:
-    - severidad base
-    - familias detectadas
-    - detalle de reglas relevantes
-    - severidad mínima sugerida
-    - severidad final
-
-    Esta función es la recomendada para nuevos flujos.
-    """
     severidad_base = _clasificar_severidad_base(descripcion)
     reglas = evaluar_reglas_relevantes(descripcion)
 
@@ -144,16 +122,6 @@ def analizar_severidad_detallada(descripcion: str) -> Dict:
     }
 
 
-# ------------------------------------------------
-# 5️⃣ API SIMPLE COMPATIBLE
-# ------------------------------------------------
-
 def clasificar_severidad(descripcion: str) -> str:
-    """
-    Compatibilidad con el sistema actual.
-
-    Retorna solo la severidad final, pero internamente
-    ya contempla reglas relevantes.
-    """
     analisis = analizar_severidad_detallada(descripcion)
     return analisis["severidad_final"]

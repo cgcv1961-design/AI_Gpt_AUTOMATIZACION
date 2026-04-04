@@ -143,57 +143,32 @@
             display: flex;
             flex-direction: column;
             justify-content: center;
-            gap: 8px;
+            gap: 10px;
         }
 
-        .score-number {
-            font-size: 62px;
+        .score-block {
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: #f8fbff;
+            border: 1px solid var(--border);
+        }
+
+        .score-block strong {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .score-value {
+            font-size: 28px;
             font-weight: 800;
-            line-height: 0.95;
+            line-height: 1;
             color: var(--primary);
         }
 
-        .score-label {
-            font-size: 14px;
-            color: var(--muted);
-            line-height: 1.35;
-        }
-
-        .score-explainer {
-            margin-top: 2px;
-            font-size: 13px;
-            line-height: 1.45;
-            color: var(--text);
-            background: #eef4ff;
-            border: 1px solid #d8e5ff;
-            border-radius: 10px;
-            padding: 10px 12px;
-        }
-
-        .score-bar-box {
+        .score-level {
             margin-top: 4px;
-        }
-
-        .score-bar {
-            width: 100%;
-            height: 12px;
-            border-radius: 999px;
-            background: #e7eefb;
-            overflow: hidden;
-            border: 1px solid #d3def4;
-        }
-
-        .score-fill {
-            height: 100%;
-            border-radius: 999px;
-            background: linear-gradient(90deg, #2563eb 0%, #1d4ed8 100%);
-        }
-
-        .score-scale {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 6px;
-            font-size: 11px;
+            font-size: 13px;
             color: var(--muted);
         }
 
@@ -367,7 +342,6 @@
                 padding-right: 16px;
             }
             h1 { font-size: 24px; }
-            .score-number { font-size: 48px; }
             .actions { flex-direction: column; }
             .btn { text-align: center; }
         }
@@ -375,8 +349,6 @@
 </head>
 <body>
     {% set riesgo = (nivel_riesgo or 'medio') | lower | replace(' ', '-') %}
-    {% set score_valor = (score_total or 0) | float %}
-    {% set score_pct = score_valor if score_valor <= 100 else 100 %}
     {% set pais_actual = (pais_referencia or 'internacional') | lower %}
 
     {% set parte_analizada_label_final = parte_analizada_label if parte_analizada_label is defined and parte_analizada_label not in ['', '-'] else 'Parte analizada' %}
@@ -395,33 +367,16 @@
         {% set etiqueta_pais = "Internacional / Otro" %}
     {% endif %}
 
-    {% if riesgo == "bajo" %}
-        {% set resumen_score = "Interpretación: riesgo bajo." %}
-        {% set explicacion_riesgo = "El contrato presenta una exposición relativamente contenida, aunque igualmente conviene revisar sus cláusulas relevantes antes de firmar." %}
-    {% elif riesgo == "medio" %}
-        {% set resumen_score = "Interpretación: riesgo medio." %}
-        {% set explicacion_riesgo = "El contrato presenta elementos que requieren revisión, ya que existen obligaciones o condiciones que podrían generar exposición jurídica, económica u operativa." %}
-    {% elif riesgo == "medio-alto" %}
-        {% set resumen_score = "Interpretación: riesgo medio-alto." %}
-        {% set explicacion_riesgo = "El contrato presenta una exposición importante y contiene cláusulas que merecen revisión cuidadosa antes de su firma o negociación." %}
-    {% elif riesgo == "alto" %}
-        {% set resumen_score = "Interpretación: riesgo alto." %}
-        {% set explicacion_riesgo = "El contrato presenta una exposición elevada y requiere revisión prioritaria, ya que contiene cláusulas con potencial impacto significativo." %}
-    {% elif riesgo == "critico" %}
-        {% set resumen_score = "Interpretación: riesgo crítico." %}
-        {% set explicacion_riesgo = "El contrato presenta una exposición extremadamente elevada y requiere revisión inmediata antes de cualquier avance." %}
-    {% else %}
-        {% set resumen_score = "Interpretación automática basada en el scoring del sistema." %}
-        {% set explicacion_riesgo = interpretacion_score if interpretacion_score is defined and interpretacion_score else "El score es una medida numérica del riesgo total del contrato." %}
-    {% endif %}
+    {# Fallbacks para no romper si api.py todavía no pasa los nuevos campos #}
+    {% set severidad_contrato_score_final = severidad_contrato_score if severidad_contrato_score is defined else score_total %}
+    {% set severidad_contrato_nivel_final = severidad_contrato_nivel if severidad_contrato_nivel is defined else nivel_riesgo %}
+    {% set riesgo_parte_score_final = riesgo_parte_score if riesgo_parte_score is defined else score_total %}
+    {% set riesgo_parte_nivel_final = riesgo_parte_nivel if riesgo_parte_nivel is defined else nivel_riesgo %}
+    {% set riesgo_contraparte_score_final = riesgo_contraparte_score if riesgo_contraparte_score is defined else score_total %}
+    {% set riesgo_contraparte_nivel_final = riesgo_contraparte_nivel if riesgo_contraparte_nivel is defined else nivel_riesgo %}
+    {% set rol_contraparte_final = rol_contraparte if rol_contraparte is defined and rol_contraparte else "Contraparte" %}
 
     {% set partes_visibles = partes_con_rol if partes_con_rol is defined and partes_con_rol else partes %}
-
-    {# ----------------------------------------------------- #}
-    {# LECTURA RÁPIDA MEJORADA                              #}
-    {# Usa la interpretación ejecutiva si existe, y si no   #}
-    {# arma una síntesis con información útil.              #}
-    {# ----------------------------------------------------- #}
 
     {% set resumen_web = "" %}
     {% set interpretacion_limpia = interpretacion_ejecutiva if interpretacion_ejecutiva is defined and interpretacion_ejecutiva else "" %}
@@ -429,14 +384,14 @@
     {% if interpretacion_limpia %}
         {% set resumen_web = interpretacion_limpia %}
     {% else %}
-        {% if riesgo == "alto" or riesgo == "critico" %}
-            {% set resumen_web = "El contrato presenta un nivel de riesgo alto para la parte analizada y conviene revisar prioritariamente las cláusulas con mayor impacto jurídico, económico u operativo antes de firmar." %}
-        {% elif riesgo == "medio-alto" %}
-            {% set resumen_web = "El contrato presenta un nivel de riesgo medio-alto para la parte analizada y merece una revisión cuidadosa de las cláusulas más sensibles antes de avanzar." %}
-        {% elif riesgo == "medio" %}
-            {% set resumen_web = "El contrato presenta un nivel de riesgo medio para la parte analizada y conviene revisar especialmente los puntos que puedan generar exposición jurídica, económica u operativa." %}
+        {% if riesgo_parte_nivel_final | lower == "alto" or riesgo_parte_nivel_final | lower == "critico" %}
+            {% set resumen_web = "La parte analizada queda especialmente expuesta frente a este contrato y conviene revisar prioritariamente las cláusulas con mayor impacto jurídico, económico u operativo antes de firmar." %}
+        {% elif riesgo_parte_nivel_final | lower == "medio-alto" %}
+            {% set resumen_web = "La parte analizada asume una exposición relevante y merece una revisión cuidadosa de las cláusulas más sensibles antes de avanzar." %}
+        {% elif riesgo_parte_nivel_final | lower == "medio" %}
+            {% set resumen_web = "La parte analizada enfrenta una exposición moderada y conviene revisar especialmente los puntos que puedan generar obligaciones exigentes o desequilibrio contractual." %}
         {% else %}
-            {% set resumen_web = "El contrato presenta un nivel de riesgo relativamente contenido, aunque igualmente conviene revisar sus cláusulas principales antes de firmar." %}
+            {% set resumen_web = "La parte analizada no aparece como la principal expuesta, aunque igualmente conviene revisar que la protección contractual sea sólida, proporcionada y sostenible." %}
         {% endif %}
     {% endif %}
 
@@ -457,19 +412,10 @@
                         </div>
 
                         <div class="row">
-                            <strong>Nivel de riesgo:</strong>
-                            <span class="risk-badge risk-{{ riesgo }}">{{ nivel_riesgo or "-" }}</span>
-                        </div>
-
-                        <div class="row">
-                            <strong>Cantidad de riesgos:</strong> {{ cantidad_riesgos }}
-                        </div>
-
-                        <div class="info-box">
                             <strong>Parte analizada:</strong> {{ parte_analizada_label_final }}
                         </div>
 
-                        <div class="info-box">
+                        <div class="row">
                             <strong>Rol contractual detectado:</strong> {{ rol_detectado_final }}
                         </div>
 
@@ -499,32 +445,43 @@
                     </div>
 
                     <div class="panel score-card">
-                        <div class="score-number">{{ score_valor | round | int }}</div>
-                        <div class="score-label"><strong>Score total</strong> / 100</div>
-
-                        <div class="score-bar-box">
-                            <div class="score-bar">
-                                <div class="score-fill" style="width: {{ score_pct }}%;"></div>
-                            </div>
-                            <div class="score-scale">
-                                <span>0</span>
-                                <span>50</span>
-                                <span>100</span>
+                        <div class="score-block">
+                            <strong>Severidad del contrato</strong>
+                            <div class="score-value">{{ severidad_contrato_score_final | round | int }}</div>
+                            <div class="score-level">
+                                <span class="risk-badge risk-{{ (severidad_contrato_nivel_final or 'medio') | lower | replace(' ', '-') }}">
+                                    {{ severidad_contrato_nivel_final or "-" }}
+                                </span>
                             </div>
                         </div>
 
-                        <div class="score-explainer">
-                            <strong>{{ resumen_score }}</strong><br>
-                            {{ explicacion_riesgo }}
+                        <div class="score-block">
+                            <strong>Riesgo para la parte analizada ({{ rol_detectado_final }})</strong>
+                            <div class="score-value">{{ riesgo_parte_score_final | round | int }}</div>
+                            <div class="score-level">
+                                <span class="risk-badge risk-{{ (riesgo_parte_nivel_final or 'medio') | lower | replace(' ', '-') }}">
+                                    {{ riesgo_parte_nivel_final or "-" }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="score-block">
+                            <strong>Riesgo para la contraparte ({{ rol_contraparte_final }})</strong>
+                            <div class="score-value">{{ riesgo_contraparte_score_final | round | int }}</div>
+                            <div class="score-level">
+                                <span class="risk-badge risk-{{ (riesgo_contraparte_nivel_final or 'medio') | lower | replace(' ', '-') }}">
+                                    {{ riesgo_contraparte_nivel_final or "-" }}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="mini-guide">
                     <h3>Cómo leer este resultado</h3>
-                    <p><strong>1.</strong> El <strong>score</strong> muestra una medida numérica del riesgo total del contrato.</p>
-                    <p><strong>2.</strong> El <strong>nivel de riesgo</strong> traduce ese score a una lectura simple: bajo, medio, medio-alto, alto o crítico.</p>
-                    <p><strong>3.</strong> Las <strong>partes</strong> y el <strong>rol contractual detectado</strong> indican desde qué lado se interpreta el contrato.</p>
+                    <p><strong>1.</strong> La <strong>severidad del contrato</strong> indica qué tan exigente, agresivo o litigioso es el contrato en sí mismo.</p>
+                    <p><strong>2.</strong> El <strong>riesgo para la parte analizada</strong> muestra qué tan expuesta queda la parte que está evaluando el contrato.</p>
+                    <p><strong>3.</strong> El <strong>riesgo para la contraparte</strong> ayuda a entender hacia qué lado se desplaza la carga principal del contrato.</p>
                 </div>
 
                 <div class="resumen-box">

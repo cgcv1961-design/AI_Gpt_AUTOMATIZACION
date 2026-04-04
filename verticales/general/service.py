@@ -13,15 +13,14 @@ Responsable de:
 - Normalizar estructura (basico / tecnico)
 - Recalcular severidad (determinístico)
 - Guardar detalle auditable de reglas relevantes
-- Calcular scoring único
+- Calcular severidad del contrato
 
-MEJORA DE ESTA VERSIÓN
-----------------------
-La severidad ya no depende solo del clasificador básico.
-Ahora:
-- usa indicadores clásicos
-- usa reglas relevantes (penalidades, cesión IP, no competencia, etc.)
-- guarda detalle auditable por riesgo
+NOTA
+----
+El riesgo para la parte analizada ya NO se calcula acá.
+Se enriquece después, en main.py, una vez que:
+- ya se conoce la perspectiva
+- ya se conocen los roles visibles
 """
 
 import json
@@ -34,10 +33,7 @@ from config import CONFIG
 
 from verticales.general.prompts.prompt_general import construir_prompt_general
 from verticales.general.scoring import calcular_scoring_general
-from utils.clasificador_severidad import (
-    clasificar_severidad,
-    analizar_severidad_detallada,
-)
+from utils.clasificador_severidad import analizar_severidad_detallada
 from utils.json_cleaner import limpiar_respuesta_modelo
 
 client = OpenAI()
@@ -49,9 +45,6 @@ def analizar_general(
     config: Dict
 ) -> Dict:
 
-    # ------------------------------------------------
-    # 1️⃣ Normalización de perfil
-    # ------------------------------------------------
     if not perfil:
         raise ValueError("Perfil no informado.")
 
@@ -68,14 +61,8 @@ def analizar_general(
             f"Perfil no soportado en vertical general: {perfil}"
         )
 
-    # ------------------------------------------------
-    # 2️⃣ Construcción de prompt
-    # ------------------------------------------------
     prompt = construir_prompt_general(contrato, perfil_canonico)
 
-    # ------------------------------------------------
-    # 3️⃣ Llamada al modelo
-    # ------------------------------------------------
     try:
         response = client.chat.completions.create(
             model=modelo_nombre,
@@ -98,15 +85,8 @@ def analizar_general(
             f"Respuesta recibida:\n{resultado_texto[:800]}"
         )
 
-    # ------------------------------------------------
-    # 4️⃣ Normalización estructural
-    # ------------------------------------------------
     resultado = normalizar_estructura(resultado)
 
-    # ------------------------------------------------
-    # 5️⃣ Recalcular severidad determinística
-    #     + guardar detalle auditable
-    # ------------------------------------------------
     riesgos = (
         resultado.get("analisis_profesional", {})
                  .get("riesgos_clasificados", {})
@@ -125,46 +105,33 @@ def analizar_general(
             riesgo["severidad_minima_sugerida"] = analisis["severidad_minima_sugerida"]
             riesgo["puntaje_agravante_relevante"] = analisis["puntaje_agravante_total"]
 
-    # ------------------------------------------------
-    # 6️⃣ Scoring único
-    # ------------------------------------------------
     scoring = calcular_scoring_general(resultado)
     resultado["scoring"] = scoring
 
-    # ------------------------------------------------
-    # 7️⃣ Metadata técnica
-    # ------------------------------------------------
     resultado["metadata_sistema"] = {
         "vertical": "general",
         "perfil_original": perfil,
         "perfil_canonico": perfil_canonico,
         "modelo_utilizado": modelo_nombre,
-        "version_servicio": "4.1_general_unificado_reglas_relevantes"
+        "version_servicio": "4.2_general_severidad_contrato_direccion_posterior"
     }
 
     return resultado
 
 
-# ==========================================================
-# 🔧 FUNCION DE NORMALIZACION INTERNA
-# ==========================================================
-
 def normalizar_estructura(resultado: Dict) -> Dict:
     """
     Convierte cualquier salida (basico o tecnico)
     en estructura interna única:
-
     resultado["analisis_profesional"]["riesgos_clasificados"]
     """
 
-    # Si ya viene en formato técnico correcto
     if (
         "analisis_profesional" in resultado and
         "riesgos_clasificados" in resultado["analisis_profesional"]
     ):
         return resultado
 
-    # Si viene como perfil basico
     riesgos_basico = resultado.get("riesgos_detectados", [])
 
     riesgos_normalizados = {
@@ -175,14 +142,13 @@ def normalizar_estructura(resultado: Dict) -> Dict:
     }
 
     for riesgo in riesgos_basico:
-
         descripcion = riesgo.get("descripcion", "")
         impacto = riesgo.get("impacto", "legal")
 
         riesgo_normalizado = {
             "descripcion": descripcion,
             "impacto": impacto,
-            "severidad": "baja"  # se recalcula luego
+            "severidad": "baja"
         }
 
         if impacto == "financiero":
@@ -200,29 +166,17 @@ def normalizar_estructura(resultado: Dict) -> Dict:
     return resultado
 
 
-# =========================================================
-# ADAPTADOR PARA EL MOTOR PRINCIPAL
-# =========================================================
-
 def ejecutar_analisis_general(data: dict):
     """
     Adaptador entre main.py y analizar_general()
     para ejecución desde el demo.
-
-    Mejora incorporada:
-    - se agrega spinner visual para evitar la sensación de pausa muerta
-      durante la ejecución del análisis IA.
     """
 
     print("📑 Analizando contrato en vertical GENERAL...\n")
 
     texto = data.get("texto", "")
-
-    # Forzamos perfil a "tecnico", más profesional en vertical general.
-    # Podría existir perfil "basico" para menor detalle y menor costo.
     perfil = "tecnico"
 
-    # Configuración mínima requerida por analizar_general
     with spinner("   ⏳ Ejecutando análisis IA general", "✔ Análisis completado"):
         resultado = analizar_general(
             contrato=texto,

@@ -2,53 +2,26 @@
 verticales/general/scoring.py
 -----------------------------
 
-Motor de scoring v4.3
-Calibración con masa crítica estructural
-+ compatibilidad con severidad crítica
-+ preparado para reglas relevantes integradas aguas arriba
+Motor de scoring v4.4
+Severidad del contrato + compatibilidad con scoring dual.
 
 OBJETIVO
 --------
-Calcular el score total y el nivel de riesgo global a partir de los
-riesgos ya clasificados por severidad.
+Calcular la SEVERIDAD DEL CONTRATO, es decir:
+qué tan exigente, duro o litigioso es el contrato en sí mismo,
+sin confundir ese valor con el riesgo específico para la parte analizada.
 
 IMPORTANTE
 ----------
-Este módulo NO detecta cláusulas por sí mismo.
-La detección y recalibración semántica ocurre antes, en:
-- utils/clasificador_severidad.py
-- core/reglas_relevantes.py
-
-Este módulo:
-- cuenta severidades finales
-- pondera
-- aplica reglas estructurales
-- devuelve el bloque scoring final
+- Este módulo NO calcula el riesgo direccional por rol.
+- Eso se agrega después en core/scoring_engine.py
+- Este módulo mantiene aliases legacy para no romper la UI ni el Word.
 """
 
 from typing import Dict
 
 
 def calcular_scoring_general(resultado: Dict) -> Dict:
-    """
-    Calcula el scoring general del contrato a partir de los riesgos
-    ya clasificados en `analisis_profesional.riesgos_clasificados`.
-
-    Parámetros
-    ----------
-    resultado : Dict
-        JSON consolidado del análisis de la vertical GENERAL.
-
-    Retorna
-    -------
-    Dict
-        Bloque `scoring` con:
-        - score_total
-        - nivel_riesgo
-        - métricas por severidad
-        - versión del algoritmo
-    """
-
     riesgos = (
         resultado.get("analisis_profesional", {})
                  .get("riesgos_clasificados", {})
@@ -62,9 +35,6 @@ def calcular_scoring_general(resultado: Dict) -> Dict:
         "baja": 0
     }
 
-    # ------------------------------------------------
-    # 1️⃣ Conteo de severidades finales
-    # ------------------------------------------------
     for categoria in riesgos.values():
         for riesgo in categoria:
             sev = riesgo.get("severidad", "baja")
@@ -73,12 +43,6 @@ def calcular_scoring_general(resultado: Dict) -> Dict:
 
     total_riesgos = sum(conteo.values())
 
-    # ------------------------------------------------
-    # 2️⃣ Ponderación calibrada
-    # ------------------------------------------------
-    # Nota:
-    # - "critica" se reserva para casos realmente extremos
-    # - mantenemos pesos previos y sumamos uno superior
     pesos = {
         "baja": 0.5,
         "media": 3,
@@ -95,28 +59,17 @@ def calcular_scoring_general(resultado: Dict) -> Dict:
         conteo["critica"] * pesos["critica"]
     )
 
-    # ------------------------------------------------
-    # 3️⃣ Reglas estructurales de dominancia
-    # ------------------------------------------------
     if conteo["critica"] >= 1:
         nivel = "alto"
-
     elif conteo["alta"] >= 2:
         nivel = "alto"
-
     elif conteo["alta"] == 1 and conteo["media-alta"] >= 2:
         nivel = "alto"
-
     elif conteo["alta"] == 1:
         nivel = "medio-alto"
-
     elif conteo["media-alta"] >= 3:
         nivel = "medio-alto"
-
     else:
-        # ------------------------------------------------
-        # 4️⃣ Evaluación por score acumulado
-        # ------------------------------------------------
         if score_total >= 45:
             nivel = "alto"
         elif score_total >= 25:
@@ -126,17 +79,22 @@ def calcular_scoring_general(resultado: Dict) -> Dict:
         else:
             nivel = "bajo"
 
-    # ------------------------------------------------
-    # 5️⃣ Masa crítica estructural
-    # ------------------------------------------------
-    # Si hay muchos riesgos aunque todos sean leves, el sistema no
-    # debería devolver "bajo" automáticamente.
     if nivel == "bajo" and total_riesgos >= 8:
         nivel = "medio"
 
+    score_total = round(score_total, 2)
+
     return {
-        "score_total": round(score_total, 2),
+        "severidad_contrato": {
+            "score": score_total,
+            "nivel": nivel,
+            "fundamento": "Mide la intensidad jurídica, económica y operativa del contrato en sí mismo."
+        },
+
+        # aliases legacy para no romper nada existente
+        "score_total": score_total,
         "nivel_riesgo": nivel,
+
         "metricas": {
             "cantidad_riesgos": total_riesgos,
             "riesgos_criticos": conteo["critica"],
@@ -145,5 +103,5 @@ def calcular_scoring_general(resultado: Dict) -> Dict:
             "riesgos_medios": conteo["media"],
             "riesgos_bajos": conteo["baja"]
         },
-        "version_scoring": "4.3_general_reglas_relevantes"
+        "version_scoring": "4.4_general_severidad_contrato"
     }
