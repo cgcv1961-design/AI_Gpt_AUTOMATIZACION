@@ -6,52 +6,70 @@ Motor de scoring para la vertical AUDIOVISUAL.
 
 OBJETIVO DE ESTA VERSIÓN
 ------------------------
-Alinear la vertical audiovisual con la nueva arquitectura general del sistema:
+Resolver el problema principal detectado en las pruebas:
+
+- la severidad contractual audiovisual era razonable
+- pero el riesgo para la parte analizada y para la contraparte
+  quedaba casi simétrico
+
+Esta versión separa explícitamente:
 
 1. Severidad del contrato
 2. Riesgo para la parte analizada
 3. Riesgo para la contraparte
 
-IMPORTANTE
-----------
-Este módulo ya no debe quedarse como un scoring aislado o paralelo.
-Ahora actúa como adaptador audiovisual del motor dual.
+PRINCIPIO DE DISEÑO
+-------------------
+En audiovisual no alcanza una lógica dual genérica.
+Hace falta interpretar el sentido del riesgo según el sector.
+
+Ejemplo:
+- cesión global de derechos
+- falta de regalías
+- rescisión unilateral por la productora
+- seguro limitado
+- exclusividad amplia
+
+Todo eso suele cargar principalmente sobre el ARTISTA,
+aunque el contrato en sí pueda ser severo para ambas partes
+en términos de litigiosidad o rigidez.
 
 ENTRADA ESPERADA
 ----------------
 resultado : dict
-    JSON ya normalizado del análisis audiovisual.
+    JSON audiovisual ya normalizado.
 rol_analizado : str
-    Rol contractual detectado para la parte analizada
-    (por ejemplo: "Artista", "Productora", "Productor").
+    Rol contractual detectado para la parte analizada.
+    Ejemplos:
+    - "Artista"
+    - "Productora"
+    - "Productor"
 
 SALIDA
 ------
 resultado : dict
-    El mismo JSON, con el bloque `scoring` enriquecido.
+    El mismo JSON con `resultado["scoring"]` enriquecido.
 
-PRINCIPIO
----------
-- Primero se calcula una severidad contractual audiovisual coherente.
-- Luego se usa el motor dual común del sistema para construir la salida final.
+COMPATIBILIDAD
+--------------
+- Mantiene aliases legacy:
+    score_total
+    nivel_riesgo
+- Mantiene metricas
+- Mantiene version_scoring
 """
 
 from __future__ import annotations
 
-from typing import Dict, List, Any
-
-from core.scoring_engine import enriquecer_scoring_dual
+from typing import Dict, List, Any, Tuple
 
 
 # =========================================================
 # CONFIGURACIÓN
 # =========================================================
 
-ALGORITMO_SCORING_VERSION = "4.0_aud_dual_alineado"
+ALGORITMO_SCORING_VERSION = "5.0_aud_direccional_por_rol"
 
-# Pesos por severidad para la vertical audiovisual.
-# Mantienen la lógica más expresiva del sector audiovisual,
-# pero ya compatibles con la escala ampliada.
 PESOS_SEVERIDAD_AUD = {
     "baja": 1.0,
     "media": 3.0,
@@ -62,7 +80,7 @@ PESOS_SEVERIDAD_AUD = {
 
 
 # =========================================================
-# HELPERS
+# HELPERS GENERALES
 # =========================================================
 
 def _texto(valor: Any) -> str:
@@ -87,20 +105,60 @@ def _normalizar_severidad(severidad: str) -> str:
     return equivalencias.get(valor, "media")
 
 
+def _normalizar_rol(rol: str) -> str:
+    valor = _texto(rol).lower()
+
+    if "artista" in valor or "intérprete" in valor or "interprete" in valor:
+        return "artista"
+
+    if "productora" in valor:
+        return "productora"
+
+    if "productor" in valor:
+        return "productor"
+
+    return valor or "artista"
+
+
+def _rol_contraparte(rol_analizado: str) -> str:
+    rol = _normalizar_rol(rol_analizado)
+
+    if rol == "artista":
+        return "productora"
+    if rol in ("productora", "productor"):
+        return "artista"
+
+    return "contraparte"
+
+
+def _etiqueta_rol(rol: str) -> str:
+    rol_norm = _normalizar_rol(rol)
+
+    if rol_norm == "artista":
+        return "Artista"
+    if rol_norm == "productora":
+        return "Productora"
+    if rol_norm == "productor":
+        return "Productor"
+
+    return _texto(rol) if _texto(rol) else "Contraparte"
+
+
 def _determinar_nivel_audiovisual(score: float) -> str:
     """
-    Determinación cualitativa de severidad contractual audiovisual.
+    Nivel cualitativo audiovisual.
 
-    Mantiene una calibración sectorial simple:
-    - score bajo: contrato relativamente contenido
-    - score medio: contrato con exigencias relevantes
-    - score alto: contrato duro / agresivo
-    - score crítico: contrato especialmente severo
+    Ajuste fino:
+    - antes el score 31 salía "medio"
+    - ahora queremos que contratos con varias cláusulas relevantes
+      entren más fácilmente en medio-alto
     """
-    if score < 15:
+    if score < 12:
         return "bajo"
-    elif score < 35:
+    elif score < 24:
         return "medio"
+    elif score < 40:
+        return "medio-alto"
     elif score < 60:
         return "alto"
     else:
@@ -137,13 +195,17 @@ def _contar_metricas(riesgos: List[Dict[str, Any]]) -> Dict[str, int]:
     }
 
 
+# =========================================================
+# SEVERIDAD CONTRACTUAL
+# =========================================================
+
 def _calcular_score_base_audiovisual(riesgos: List[Dict[str, Any]]) -> float:
     """
-    Score base audiovisual.
+    Score base audiovisual = severidad del contrato.
 
-    Regla:
-    - usa la severidad ya recalculada por el clasificador determinista
-    - suma el puntaje agravante relevante cuando existe
+    Usa:
+    - severidad ya recalculada por el clasificador determinista
+    - puntaje agravante relevante, cuando exista
     """
     score = 0.0
 
@@ -157,12 +219,189 @@ def _calcular_score_base_audiovisual(riesgos: List[Dict[str, Any]]) -> float:
     return round(score, 2)
 
 
-def _obtener_resumen_equilibrio(resultado: Dict[str, Any]) -> str:
-    return _texto(
-        resultado.get("analisis_profesional", {}).get("evaluacion_equilibrio_contractual")
-        or resultado.get("analisis_sectorial", {}).get("evaluacion_equilibrio_contractual")
-        or resultado.get("informe_cliente", {}).get("resumen_ejecutivo", {}).get("nivel_riesgo_global")
-    )
+# =========================================================
+# DIRECCIONALIDAD AUDIOVISUAL
+# =========================================================
+
+def _direccion_desde_prompt(riesgo: Dict[str, Any]) -> str:
+    """
+    Usa el campo nuevo pedido al prompt:
+    - artista
+    - productora
+    - ambas
+
+    Si no existe, devuelve string vacío y caerá en heurística.
+    """
+    direccion = _texto(riesgo.get("afecta_principalmente_a")).lower()
+
+    if direccion in ("artista", "productora", "ambas"):
+        return direccion
+
+    return ""
+
+
+def _inferir_direccion_heuristica(riesgo: Dict[str, Any]) -> str:
+    """
+    Heurística sectorial audiovisual.
+
+    Devuelve:
+    - artista
+    - productora
+    - ambas
+    """
+    descripcion = _texto(riesgo.get("descripcion")).lower()
+    recomendacion = _texto(riesgo.get("recomendacion")).lower()
+    texto = f"{descripcion} {recomendacion}".strip()
+
+    # Riesgos típicamente cargados sobre el artista
+    patrones_artista = [
+        "cesión de derechos",
+        "cesion de derechos",
+        "exclusiva",
+        "irrevocable",
+        "máximo plazo legal",
+        "maximo plazo legal",
+        "futuras posibilidades del artista",
+        "sin regalías",
+        "sin regalias",
+        "explotaciones secundarias",
+        "negociación futura",
+        "negociacion futura",
+        "participar en producciones competitivas",
+        "exclusividad impide",
+        "rescindir",
+        "rescindido unilateralmente",
+        "rescisión unilateral",
+        "rescision unilateral",
+        "sin compensación",
+        "sin compensacion",
+        "seguro contratado por la productora",
+        "no cubre otras actividades",
+        "confidencialidad se extiende",
+        "restringir la comunicación profesional del artista",
+    ]
+
+    # Riesgos típicamente cargados sobre la productora
+    patrones_productora = [
+        "pago en dos etapas",
+        "pago al inicio",
+        "pago al finalizar",
+        "incumplimiento grave del artista",
+        "notificación formal del artista",
+        "notificacion formal del artista",
+        "riesgo reputacional por conducta del artista",
+        "limitaciones de disponibilidad del artista",
+    ]
+
+    # Riesgos compartidos / estructurales
+    patrones_ambas = [
+        "resolución de disputas",
+        "resolucion de disputas",
+        "jurisdicción ordinaria",
+        "jurisdiccion ordinaria",
+        "mecanismos de resolución de disputas",
+        "mecanismos de resolucion de disputas",
+        "vacíos operativos",
+        "vacios operativos",
+        "cambios en el cronograma",
+        "reprogramaciones",
+    ]
+
+    if any(p in texto for p in patrones_artista):
+        return "artista"
+
+    if any(p in texto for p in patrones_productora):
+        return "productora"
+
+    if any(p in texto for p in patrones_ambas):
+        return "ambas"
+
+    # Fallback por impacto + redacción
+    impacto = _texto(riesgo.get("impacto")).lower()
+
+    if "artista" in texto:
+        return "artista"
+
+    if "productora" in texto and "puede" in texto and "rescind" in texto:
+        return "artista"
+
+    if impacto in ("legal", "financiero", "operativo") and (
+        "cesión" in texto or
+        "cesion" in texto or
+        "regalías" in texto or
+        "regalias" in texto or
+        "exclusividad" in texto or
+        "seguro" in texto
+    ):
+        return "artista"
+
+    return "ambas"
+
+
+def _obtener_direccion_riesgo(riesgo: Dict[str, Any]) -> str:
+    """
+    Prioridad:
+    1. campo explícito del prompt
+    2. heurística audiovisual
+    """
+    direccion = _direccion_desde_prompt(riesgo)
+    if direccion:
+        return direccion
+
+    return _inferir_direccion_heuristica(riesgo)
+
+
+def _peso_base_riesgo(riesgo: Dict[str, Any]) -> float:
+    severidad = _normalizar_severidad(riesgo.get("severidad", "media"))
+    peso = PESOS_SEVERIDAD_AUD.get(severidad, 3.0)
+    agravante = float(riesgo.get("puntaje_agravante_relevante", 0.0) or 0.0)
+    return peso + agravante
+
+
+def _repartir_score_por_rol(
+    riesgos: List[Dict[str, Any]],
+    rol_analizado: str
+) -> Tuple[float, float]:
+    """
+    Reparte el score entre:
+    - parte analizada
+    - contraparte
+
+    Regla:
+    - si el riesgo afecta principalmente a la parte analizada, carga casi completo
+    - si afecta a la contraparte, carga poco
+    - si afecta a ambas, se reparte
+    """
+    rol = _normalizar_rol(rol_analizado)
+    contraparte = _rol_contraparte(rol)
+
+    score_parte = 0.0
+    score_contraparte = 0.0
+
+    for riesgo in riesgos:
+        base = _peso_base_riesgo(riesgo)
+        direccion = _obtener_direccion_riesgo(riesgo)
+
+        if direccion == "ambas":
+            score_parte += base * 0.65
+            score_contraparte += base * 0.65
+            continue
+
+        if direccion == rol:
+            score_parte += base * 1.00
+            score_contraparte += base * 0.20
+            continue
+
+        if direccion == contraparte:
+            score_parte += base * 0.20
+            score_contraparte += base * 1.00
+            continue
+
+        # fallback muy conservador
+        score_parte += base * 0.60
+        score_contraparte += base * 0.60
+
+    return round(score_parte, 2), round(score_contraparte, 2)
 
 
 # =========================================================
@@ -171,82 +410,68 @@ def _obtener_resumen_equilibrio(resultado: Dict[str, Any]) -> str:
 
 def calcular_scoring_productor(resultado: Dict[str, Any], rol_analizado: str = "Artista") -> Dict[str, Any]:
     """
-    Aplica scoring audiovisual alineado con el motor dual.
+    Aplica scoring audiovisual con direccionalidad real por rol.
 
     Paso 1:
-        calcula la severidad del contrato en clave audiovisual
+        calcula la severidad del contrato
 
     Paso 2:
-        deja ese resultado en `resultado["scoring"]`
+        reparte el riesgo entre parte analizada y contraparte
+        según orientación audiovisual específica
 
     Paso 3:
-        delega en `enriquecer_scoring_dual(...)` para completar:
-        - riesgo para la parte analizada
-        - riesgo para la contraparte
-
-    Parámetros
-    ----------
-    resultado : dict
-        JSON audiovisual normalizado.
-    rol_analizado : str
-        Rol contractual detectado para la parte analizada.
-
-    Retorna
-    -------
-    dict
-        JSON con scoring enriquecido.
+        construye el bloque `scoring`
     """
     if not isinstance(resultado, dict):
         return resultado
 
     riesgos = _extraer_riesgos_audiovisuales(resultado)
+    rol_norm = _normalizar_rol(rol_analizado)
+    rol_contraparte = _rol_contraparte(rol_norm)
 
-    score_total = _calcular_score_base_audiovisual(riesgos)
-    nivel = _determinar_nivel_audiovisual(score_total)
+    severidad_score = _calcular_score_base_audiovisual(riesgos)
+    severidad_nivel = _determinar_nivel_audiovisual(severidad_score)
+
+    score_parte, score_contraparte = _repartir_score_por_rol(
+        riesgos=riesgos,
+        rol_analizado=rol_norm
+    )
+
+    nivel_parte = _determinar_nivel_audiovisual(score_parte)
+    nivel_contraparte = _determinar_nivel_audiovisual(score_contraparte)
+
     metricas = _contar_metricas(riesgos)
 
-    resumen_equilibrio = _obtener_resumen_equilibrio(resultado)
-
-    # -----------------------------------------------------
-    # 1) BLOQUE BASE DE SEVERIDAD CONTRACTUAL
-    # -----------------------------------------------------
     resultado["scoring"] = {
         "severidad_contrato": {
-            "score": score_total,
-            "nivel": nivel,
-            "fundamento": (
-                "Mide la intensidad jurídica, económica y operativa del contrato audiovisual en sí mismo."
-            )
+            "score": severidad_score,
+            "nivel": severidad_nivel,
+            "fundamento": "Mide la intensidad jurídica, económica y operativa del contrato audiovisual en sí mismo."
+        },
+        "riesgo_parte_analizada": {
+            "score": score_parte,
+            "nivel": nivel_parte,
+            "rol": _etiqueta_rol(rol_norm),
+            "fundamento": "Mide qué tan expuesta queda la parte analizada según las cláusulas audiovisuales del contrato."
+        },
+        "riesgo_contraparte": {
+            "score": score_contraparte,
+            "nivel": nivel_contraparte,
+            "rol": _etiqueta_rol(rol_contraparte),
+            "fundamento": "Mide qué tan expuesta queda la contraparte según las mismas cláusulas."
         },
 
         # aliases legacy
-        "score_total": score_total,
-        "nivel_riesgo": nivel,
+        "score_total": severidad_score,
+        "nivel_riesgo": severidad_nivel,
 
         "metricas": metricas,
         "version_scoring": ALGORITMO_SCORING_VERSION,
     }
 
-    # -----------------------------------------------------
-    # 2) APOYO DE CONTEXTO PARA EL MOTOR DUAL
-    # -----------------------------------------------------
-    # Si todavía no existe metadata_sistema, la creamos.
+    # metadata de apoyo
     resultado.setdefault("metadata_sistema", {})
     resultado["metadata_sistema"].setdefault("metadata_presentacion", {})
-
-    # Forzamos el rol detectado para ayudar a enriquecer la salida dual,
-    # especialmente antes de que main.py complete metadata más rica.
-    if rol_analizado:
-        resultado["metadata_sistema"]["metadata_presentacion"]["rol_contractual_detectado"] = rol_analizado
-
-    # Si hay resumen de equilibrio contractual, es útil conservarlo
-    # porque puede reforzar la lectura direccional en capas posteriores.
-    if resumen_equilibrio:
-        resultado["metadata_sistema"]["resumen_equilibrio_contractual"] = resumen_equilibrio
-
-    # -----------------------------------------------------
-    # 3) ENRIQUECIMIENTO DUAL
-    # -----------------------------------------------------
-    resultado = enriquecer_scoring_dual(resultado)
+    resultado["metadata_sistema"]["metadata_presentacion"]["rol_contractual_detectado"] = _etiqueta_rol(rol_norm)
 
     return resultado

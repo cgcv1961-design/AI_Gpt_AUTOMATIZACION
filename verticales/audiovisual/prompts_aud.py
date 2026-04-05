@@ -31,14 +31,20 @@ Mejorar:
 - concisión
 - utilidad comercial
 - legibilidad para prospectos no técnicos
+- DIRECCIONALIDAD DEL RIESGO en audiovisual
 
-Manteniendo:
-- estructura JSON
-- riqueza analítica
-- compatibilidad con el sistema actual
+NOVEDAD CLAVE
+-------------
+Cada riesgo debe indicar a quién afecta principalmente:
+- artista
+- productora
+- ambas
+
+Esto no reemplaza el scoring.
+Sirve para orientar correctamente el reparto del riesgo en la capa determinística.
 """
 
-VERSION_PROMPT_AU = "3.2_audiovisual_json_rico_claro"
+VERSION_PROMPT_AU = "4.0_audiovisual_json_rico_con_direccion"
 
 
 def construir_prompt_audiovisual(contrato: str) -> str:
@@ -112,9 +118,22 @@ Cada elemento dentro de "riesgos_sectoriales" debe contener EXACTAMENTE:
 - descripcion (string)
 - impacto (legal|financiero|operativo|reputacional|mixto)
 - recomendacion (string)
+- afecta_principalmente_a (artista|productora|ambas)
 
 NO incluir severidad.
 La severidad será calculada externamente.
+
+MUY IMPORTANTE SOBRE "afecta_principalmente_a"
+----------------------------------------------
+Usa:
+- "artista" cuando la cláusula carga principalmente sobre el intérprete / artista
+- "productora" cuando la cláusula carga principalmente sobre la productora
+- "ambas" cuando el riesgo sea verdaderamente compartido o estructural
+
+Ejemplos orientativos:
+- cesión amplia, exclusividad, falta de regalías, rescisión unilateral por la productora, seguro limitado -> normalmente "artista"
+- vacíos de resolución de disputas, cronograma, ambigüedad operativa común -> normalmente "ambas"
+- obligaciones especialmente gravosas de pago o ejecución sobre la productora -> "productora"
 
 C) RESUMEN EJECUTIVO
 - Máximo 3 frases.
@@ -174,7 +193,8 @@ FORMATO JSON EXACTO
       {{
         "descripcion": "",
         "impacto": "legal",
-        "recomendacion": ""
+        "recomendacion": "",
+        "afecta_principalmente_a": "artista"
       }}
     ],
     "nivel_confianza_analisis": {{
