@@ -6,46 +6,38 @@ Motor de scoring para la vertical AUDIOVISUAL.
 
 VERSIÓN
 -------
-5.2_aud_direccional_simetrico
+5.3_aud_direccional_fuerte
 
 OBJETIVO DE ESTA VERSIÓN
 ------------------------
 Corregir el problema detectado en pruebas reales:
 
 1. La severidad contractual audiovisual era razonable.
-2. El riesgo para el ARTISTA mejoró.
-3. Pero el riesgo para la PRODUCTORA seguía quedando demasiado alto
-   cuando el propio JSON narrativo indicaba que el mayor riesgo recaía
-   sobre el artista.
+2. Pero el reparto del riesgo entre Artista y Productora seguía
+   quedando demasiado simétrico.
+3. Eso contradecía el propio contenido narrativo del JSON, que
+   claramente muestra que la mayor carga suele recaer sobre el Artista.
 
-Esta versión:
-- mantiene la severidad del contrato,
-- mejora la direccionalidad del riesgo,
-- corrige de manera simétrica según el resumen ejecutivo,
-- restaura `metricas` para Word y UI.
+CAMBIO CONCEPTUAL CLAVE
+-----------------------
+Se elimina la dependencia principal del "corrector final por resumen"
+y se pasa a una direccionalidad fuerte por cláusula.
 
 PRINCIPIO DE DISEÑO
 -------------------
-La IA interpreta y describe.
-La lógica determinística:
-- reparte el riesgo,
-- valida consistencia,
-- corrige asimetrías numéricas no deseadas.
-
-IMPORTANTE
-----------
 En audiovisual:
-- muchas cláusulas son severas en el contrato en sí,
-- pero NO afectan igual a ambas partes.
+- el contrato puede ser severo en sí mismo,
+- pero eso NO implica que ambas partes queden igual de expuestas.
 
-Ejemplo:
+Ejemplos típicos de riesgo para el Artista:
 - cesión amplia de derechos
 - falta de regalías
-- rescisión unilateral por la productora
 - exclusividad
+- rescisión unilateral por la productora
 - seguro limitado
+- confidencialidad extensa
 
-Todo eso suele cargar mucho más sobre el ARTISTA.
+Estos riesgos NO deben repartirse simétricamente.
 
 ENTRADA ESPERADA
 ----------------
@@ -63,18 +55,26 @@ SALIDA
 resultado : dict
     El mismo JSON con:
     resultado["scoring"] enriquecido.
+
+COMPATIBILIDAD
+--------------
+Mantiene:
+- score_total
+- nivel_riesgo
+- metricas
+- version_scoring
 """
 
 from __future__ import annotations
 
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any
 
 
 # =========================================================
 # CONFIGURACIÓN
 # =========================================================
 
-ALGORITMO_SCORING_VERSION = "5.2_aud_direccional_simetrico"
+ALGORITMO_SCORING_VERSION = "5.3_aud_direccional_fuerte"
 
 PESOS_SEVERIDAD_AUD = {
     "baja": 1.0,
@@ -152,14 +152,7 @@ def _etiqueta_rol(rol: str) -> str:
 
 def _determinar_nivel_audiovisual(score: float) -> str:
     """
-    Determinación cualitativa del nivel.
-
-    Escala calibrada:
-    - bajo
-    - medio
-    - medio-alto
-    - alto
-    - crítico
+    Escala cualitativa audiovisual.
     """
     if score < 10:
         return "bajo"
@@ -233,12 +226,12 @@ def _calcular_score_base_audiovisual(riesgos: List[Dict[str, Any]]) -> float:
 
 def _direccion_desde_prompt(riesgo: Dict[str, Any]) -> str:
     """
-    Usa el campo pedido al prompt:
+    Usa el campo opcional:
     - artista
     - productora
     - ambas
 
-    Si no existe o viene vacío, devuelve string vacío.
+    Si no existe, devuelve string vacío.
     """
     direccion = _texto(riesgo.get("afecta_principalmente_a")).lower()
 
@@ -250,17 +243,16 @@ def _direccion_desde_prompt(riesgo: Dict[str, Any]) -> str:
 
 def _inferir_direccion_heuristica(riesgo: Dict[str, Any]) -> str:
     """
-    Heurística sectorial audiovisual.
+    Heurística sectorial audiovisual FUERTE.
 
     Devuelve:
     - artista
     - productora
     - ambas
 
-    Reglas:
-    - por defecto fuerte hacia ARTISTA si la cláusula le restringe ingresos,
-      derechos, oportunidades o protección.
-    - solo marca PRODUCTORA cuando realmente la expone a ella.
+    Regla dominante:
+    si la cláusula afecta derechos, ingresos, libertad profesional,
+    estabilidad o protección del intérprete, se asigna a ARTISTA.
     """
     descripcion = _texto(riesgo.get("descripcion")).lower()
     recomendacion = _texto(riesgo.get("recomendacion")).lower()
@@ -272,8 +264,7 @@ def _inferir_direccion_heuristica(riesgo: Dict[str, Any]) -> str:
     patrones_artista = [
         "cesión",
         "cesion",
-        "derechos exclusiva",
-        "derechos exclusiva",
+        "derechos",
         "irrevocable",
         "máximo plazo legal",
         "maximo plazo legal",
@@ -283,43 +274,49 @@ def _inferir_direccion_heuristica(riesgo: Dict[str, Any]) -> str:
         "regalias",
         "sin regalías",
         "sin regalias",
-        "explotaciones secundarias",
         "remuneración fija",
         "remuneracion fija",
+        "explotaciones secundarias",
+        "compensación adicional",
+        "compensacion adicional",
         "exclusividad",
         "producciones competitivas",
         "rescisión unilateral",
         "rescision unilateral",
-        "rescindir",
+        "rescisión anticipada",
+        "rescision anticipada",
         "pago solo de lo devengado",
         "seguro contratado por la productora",
         "sin detalle de coberturas",
+        "cobertura adecuada",
         "confidencialidad",
         "vigencia posterior",
-        "indefinida",
+        "sin plazo definido",
+        "posterior al contrato",
         "limita la participación del artista",
-        "limitar la agenda y oportunidades del artista",
-        "sin ingresos adicionales",
-        "interpretación del artista",
-        "interpretacion del artista",
+        "oportunidades laborales",
+        "ingresos futuros",
+        "control sobre la obra",
+        "control sobre la interpretación",
+        "estabilidad laboral del artista",
     ]
 
     # -----------------------------------------------------
     # RIESGOS PRINCIPALMENTE DE LA PRODUCTORA
     # -----------------------------------------------------
     patrones_productora = [
-        "incumplimiento del artista",
-        "inasistencia del artista",
         "incumplimiento grave del artista",
+        "inasistencia del artista",
         "disponibilidad del artista",
-        "responsabilidad económica de la productora",
-        "obligación de pago de la productora",
-        "obligacion de pago de la productora",
         "costos adicionales de producción",
         "costos adicionales de produccion",
+        "obligación de pago de la productora",
+        "obligacion de pago de la productora",
+        "responsabilidad de la productora por daños",
         "demoras imputables a la productora",
         "penalidades a la productora",
         "multa a la productora",
+        "riesgo reputacional de la productora",
     ]
 
     # -----------------------------------------------------
@@ -327,18 +324,18 @@ def _inferir_direccion_heuristica(riesgo: Dict[str, Any]) -> str:
     # -----------------------------------------------------
     patrones_ambas = [
         "cronograma",
-        "entregables",
-        "penalidades por incumplimiento para ambas partes",
-        "resolución de disputas",
-        "resolucion de disputas",
-        "jurisdicción",
-        "jurisdiccion",
-        "mediación",
-        "mediacion",
-        "ambas partes",
+        "jornadas adicionales",
         "condiciones de trabajo",
         "obligaciones operativas específicas",
         "obligaciones operativas especificas",
+        "resolución de disputas",
+        "resolucion de disputas",
+        "jurisdicción exclusiva",
+        "jurisdiccion exclusiva",
+        "tribunales de montevideo",
+        "mediación",
+        "mediacion",
+        "ambas partes",
     ]
 
     if any(p in texto for p in patrones_artista):
@@ -350,14 +347,16 @@ def _inferir_direccion_heuristica(riesgo: Dict[str, Any]) -> str:
     if any(p in texto for p in patrones_ambas):
         return "ambas"
 
-    # fallback por impacto
+    # fallback fuerte audiovisual:
+    # si no está claro y la cláusula toca el núcleo típico de asimetría,
+    # la cargamos al ARTISTA.
     impacto = _texto(riesgo.get("impacto")).lower()
 
     if impacto in ("legal", "financiero", "operativo") and any(
         k in texto for k in [
-            "cesión", "cesion", "regalías", "regalias",
+            "cesión", "cesion", "derechos", "regalías", "regalias",
             "exclusividad", "seguro", "rescisión", "rescision",
-            "confidencialidad"
+            "confidencialidad", "compensación", "compensacion"
         ]
     ):
         return "artista"
@@ -366,11 +365,6 @@ def _inferir_direccion_heuristica(riesgo: Dict[str, Any]) -> str:
 
 
 def _obtener_direccion_riesgo(riesgo: Dict[str, Any]) -> str:
-    """
-    Prioridad:
-    1. dirección explícita del prompt
-    2. heurística audiovisual
-    """
     direccion = _direccion_desde_prompt(riesgo)
     if direccion:
         return direccion
@@ -379,24 +373,28 @@ def _obtener_direccion_riesgo(riesgo: Dict[str, Any]) -> str:
 
 
 # =========================================================
-# REPARTO BASE DEL SCORE
+# REPARTO DEL SCORE POR ROL
 # =========================================================
 
 def _repartir_score_por_rol(
     riesgos: List[Dict[str, Any]],
     rol_analizado: str
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """
     Reparte el score entre:
     - parte analizada
     - contraparte
 
-    Reglas:
-    - si el riesgo afecta principalmente a la parte analizada,
-      carga casi completo sobre ella
-    - si afecta a la contraparte,
-      carga muy poco sobre la parte analizada
-    - si afecta a ambas, se reparte
+    REGLA NUEVA 5.3
+    --------------
+    Mucho menos simétrica.
+
+    Si el riesgo afecta a una parte:
+    - esa parte recibe 100%
+    - la otra solo 10%
+
+    Si afecta a ambas:
+    - 60% / 60%
     """
     rol = _normalizar_rol(rol_analizado)
     contraparte = _rol_contraparte(rol)
@@ -409,120 +407,23 @@ def _repartir_score_por_rol(
         direccion = _obtener_direccion_riesgo(riesgo)
 
         if direccion == "ambas":
-            score_parte += base * 0.65
-            score_contraparte += base * 0.65
+            score_parte += base * 0.60
+            score_contraparte += base * 0.60
             continue
 
         if direccion == rol:
             score_parte += base * 1.00
-            score_contraparte += base * 0.15
+            score_contraparte += base * 0.10
             continue
 
         if direccion == contraparte:
-            score_parte += base * 0.15
+            score_parte += base * 0.10
             score_contraparte += base * 1.00
             continue
 
-        # fallback ultra conservador
-        score_parte += base * 0.60
-        score_contraparte += base * 0.60
-
-    return round(score_parte, 2), round(score_contraparte, 2)
-
-
-# =========================================================
-# CORRECTOR POR RESUMEN EJECUTIVO
-# =========================================================
-
-def _texto_resumen(resultado: Dict[str, Any]) -> str:
-    return _texto(
-        resultado.get("informe_cliente", {})
-                .get("resumen_ejecutivo", {})
-                .get("nivel_riesgo_global", "")
-    ).lower()
-
-
-def _resumen_indica_artista_mas_expuesto(texto_resumen: str) -> bool:
-    pistas = [
-        "alto para el artista",
-        "medio-alto para el artista",
-        "riesgo para el artista",
-        "moderado para el artista",
-        "bajo para la productora",
-    ]
-    return any(p in texto_resumen for p in pistas)
-
-
-def _resumen_indica_productora_mas_expuesta(texto_resumen: str) -> bool:
-    pistas = [
-        "alto para la productora",
-        "medio-alto para la productora",
-        "riesgo para la productora",
-        "moderado para la productora",
-        "bajo para el artista",
-    ]
-    return any(p in texto_resumen for p in pistas)
-
-
-def _aplicar_corrector_simetrico(
-    resultado: Dict[str, Any],
-    score_parte: float,
-    score_contraparte: float,
-    rol_analizado: str
-) -> Tuple[float, float]:
-    """
-    Corrector final basado en el resumen ejecutivo.
-
-    REGLA CLAVE
-    ----------
-    Si el resumen ya dice claramente que el riesgo cae sobre una parte,
-    el scoring no debe contradecirlo.
-
-    Esto corrige especialmente el caso:
-    - vista Productora / proponente
-    donde antes quedaba demasiado cerca del Artista.
-    """
-    texto_resumen = _texto_resumen(resultado)
-    rol = _normalizar_rol(rol_analizado)
-
-    artista_mas_expuesto = _resumen_indica_artista_mas_expuesto(texto_resumen)
-    productora_mas_expuesta = _resumen_indica_productora_mas_expuesta(texto_resumen)
-
-    # Caso 1: el resumen dice que ARTISTA carga más riesgo
-    if artista_mas_expuesto:
-        if rol == "artista":
-            # la parte analizada es artista -> debe quedar claramente por arriba
-            if score_parte <= score_contraparte:
-                score_parte *= 1.20
-                score_contraparte *= 0.70
-            else:
-                score_parte *= 1.08
-                score_contraparte *= 0.92
-        else:
-            # la parte analizada es productora -> debe quedar claramente por debajo
-            if score_parte >= score_contraparte:
-                score_parte *= 0.55
-                score_contraparte *= 1.15
-            else:
-                score_parte *= 0.85
-                score_contraparte *= 1.05
-
-    # Caso 2: el resumen dice que PRODUCTORA carga más riesgo
-    if productora_mas_expuesta:
-        if rol in ("productora", "productor"):
-            if score_parte <= score_contraparte:
-                score_parte *= 1.20
-                score_contraparte *= 0.70
-            else:
-                score_parte *= 1.08
-                score_contraparte *= 0.92
-        else:
-            if score_parte >= score_contraparte:
-                score_parte *= 0.55
-                score_contraparte *= 1.15
-            else:
-                score_parte *= 0.85
-                score_contraparte *= 1.05
+        # fallback ultra conservador, casi nunca debería ocurrir
+        score_parte += base * 0.50
+        score_contraparte += base * 0.50
 
     return round(score_parte, 2), round(score_contraparte, 2)
 
@@ -533,19 +434,17 @@ def _aplicar_corrector_simetrico(
 
 def calcular_scoring_productor(resultado: Dict[str, Any], rol_analizado: str = "Artista") -> Dict[str, Any]:
     """
-    Aplica scoring audiovisual con direccionalidad real por rol.
+    Aplica scoring audiovisual con direccionalidad fuerte por rol.
 
     Paso 1:
         calcula la severidad del contrato
 
     Paso 2:
         reparte el riesgo entre parte analizada y contraparte
+        según la orientación sectorial de cada cláusula
 
     Paso 3:
-        corrige según el resumen ejecutivo, si hace falta
-
-    Paso 4:
-        construye el bloque `scoring`
+        construye el bloque scoring final
     """
     if not isinstance(resultado, dict):
         return resultado
@@ -559,13 +458,6 @@ def calcular_scoring_productor(resultado: Dict[str, Any], rol_analizado: str = "
 
     score_parte, score_contraparte = _repartir_score_por_rol(
         riesgos=riesgos,
-        rol_analizado=rol_norm
-    )
-
-    score_parte, score_contraparte = _aplicar_corrector_simetrico(
-        resultado=resultado,
-        score_parte=score_parte,
-        score_contraparte=score_contraparte,
         rol_analizado=rol_norm
     )
 
@@ -584,20 +476,20 @@ def calcular_scoring_productor(resultado: Dict[str, Any], rol_analizado: str = "
             "score": round(score_parte, 2),
             "nivel": nivel_parte,
             "rol": _etiqueta_rol(rol_norm),
-            "fundamento": "Mide qué tan expuesta queda la parte analizada según el contenido del contrato y la perspectiva seleccionada."
+            "fundamento": "Mide qué tan expuesta queda la parte analizada según las cláusulas audiovisuales del contrato."
         },
         "riesgo_contraparte": {
             "score": round(score_contraparte, 2),
             "nivel": nivel_contraparte,
             "rol": _etiqueta_rol(rol_contraparte),
-            "fundamento": "Mide qué tan expuesta queda la contraparte en relación con las mismas cláusulas."
+            "fundamento": "Mide qué tan expuesta queda la contraparte según esas mismas cláusulas."
         },
 
         # aliases legacy
         "score_total": round(severidad_score, 2),
         "nivel_riesgo": severidad_nivel,
 
-        # restauradas para Word / UI
+        # métricas restauradas para Word y UI
         "metricas": metricas,
 
         "version_scoring": ALGORITMO_SCORING_VERSION,
