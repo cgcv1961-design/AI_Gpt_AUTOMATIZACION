@@ -4,17 +4,33 @@ AI_GPT_AUTOMATIZACION/utils/generador_word_general.py
 
 Generador de reporte Word para la vertical GENERAL.
 
-OBJETIVO DE ESTA VERSIÓN
-------------------------
-Asegurar que la salida Word:
-- use nombres y roles visibles humanos
-- no muestre diccionarios crudos
-- conserve claridad de lectura
+OBJETIVO
+--------
+Transformar el JSON final del análisis contractual en un documento Word
+legible, claro y profesional.
+
+PRINCIPIO
+---------
+JSON = fuente de verdad única
+
+MEJORAS DE ESTA VERSIÓN
+-----------------------
+1. El Word refleja la nueva arquitectura:
+   - severidad del contrato
+   - riesgo para la parte analizada
+   - riesgo para la contraparte
+
+2. Mantiene claridad de lectura:
+   - identificación clara
+   - partes con rol visible
+   - resumen ejecutivo útil
+
+3. No inventa contenido:
+   - todo sale del JSON
 """
 
 import os
 from typing import Any, Dict, List
-from pathlib import Path
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_LINE_SPACING
@@ -22,6 +38,10 @@ from docx.enum.text import WD_LINE_SPACING
 
 def generar_word_general(resultado: dict, ruta_json: str) -> str:
     doc = Document()
+
+    # =====================================================
+    # CONFIGURACIÓN BASE
+    # =====================================================
 
     estilo_normal = doc.styles["Normal"]
     estilo_normal.font.name = "Calibri"
@@ -107,10 +127,9 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
             nucleo.get("plazo"),
             default="-"
         )
-        unidad = "meses" if duracion_valor not in (None, "", [], {}, "-") else ""
         if duracion_valor == "-":
             return "-"
-        return f"{duracion_valor} {unidad}".strip()
+        return f"{duracion_valor} meses"
 
     def formatear_precio(nucleo: Dict[str, Any], resultado_dict: Dict[str, Any]) -> str:
         precio_valor = valor_no_vacio(
@@ -130,19 +149,16 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
 
         if precio_valor == "-" and moneda == "-":
             return "-"
-
         if precio_valor == "-":
             return str(moneda)
-
         if moneda == "-":
             return str(precio_valor)
 
-        periodicidad = "mensual" if resultado_dict.get("precio_mensual") not in (None, "", [], {}) else ""
-        base = f"{precio_valor} {moneda}"
-        return f"{base} ({periodicidad})" if periodicidad else base
+        return f"{precio_valor} {moneda}"
 
     def construir_distribucion_severidad(metricas: Dict[str, Any]) -> str:
         bloques = [
+            ("críticos", metricas.get("riesgos_criticos", 0)),
             ("altos", metricas.get("riesgos_altos", 0)),
             ("medio-altos", metricas.get("riesgos_media_altos", 0)),
             ("medios", metricas.get("riesgos_medios", 0)),
@@ -160,19 +176,25 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
 
         return ", ".join(partes) if partes else "sin observaciones clasificadas"
 
-    def construir_explicacion_score(nivel_riesgo_texto: Any) -> str:
-        nivel = texto_limpio(nivel_riesgo_texto, default="-").lower()
+    def construir_explicacion_nivel(nivel: str) -> str:
+        nivel = texto_limpio(nivel, default="-").lower()
 
         if nivel == "bajo":
-            return "El score indica una exposición relativamente contenida. Aun así, conviene revisar las cláusulas relevantes antes de firmar."
+            return "Indica una exposición relativamente contenida."
         if nivel == "medio":
-            return "El score indica una exposición intermedia. Existen aspectos del contrato que conviene revisar o negociar."
+            return "Indica una exposición intermedia que conviene revisar."
         if nivel == "medio-alto":
-            return "El score indica una exposición importante. El contrato contiene cláusulas que merecen revisión cuidadosa antes de su firma."
+            return "Indica una exposición importante que merece revisión cuidadosa."
         if nivel == "alto":
-            return "El score indica una exposición elevada. Se recomienda una revisión prioritaria del contrato antes de avanzar."
+            return "Indica una exposición elevada y requiere revisión prioritaria."
+        if nivel == "critico":
+            return "Indica una exposición crítica y exige revisión inmediata."
 
-        return "El score es una medida numérica del riesgo total del contrato. Cuanto mayor es el valor, mayor es la exposición al riesgo."
+        return "Refleja una medida sintética del análisis contractual."
+
+    # =====================================================
+    # EXTRACCIÓN
+    # =====================================================
 
     nucleo = resultado.get("nucleo_contractual", {}) or {}
     analisis_prof = resultado.get("analisis_profesional", {}) or {}
@@ -204,10 +226,26 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
     duracion = formatear_duracion(nucleo, resultado)
     precio = formatear_precio(nucleo, resultado)
 
+    # Scoring nuevo
+    severidad_contrato = scoring.get("severidad_contrato", {}) or {}
+    riesgo_parte = scoring.get("riesgo_parte_analizada", {}) or {}
+    riesgo_contraparte = scoring.get("riesgo_contraparte", {}) or {}
+
     score_total = texto_limpio(scoring.get("score_total"), default="-")
     nivel_riesgo = texto_limpio(scoring.get("nivel_riesgo"), default="-")
     version_scoring = texto_limpio(scoring.get("version_scoring"), default="-")
     metricas = scoring.get("metricas", {}) or {}
+
+    severidad_contrato_score = texto_limpio(severidad_contrato.get("score"), default=score_total)
+    severidad_contrato_nivel = texto_limpio(severidad_contrato.get("nivel"), default=nivel_riesgo)
+
+    riesgo_parte_score = texto_limpio(riesgo_parte.get("score"), default=score_total)
+    riesgo_parte_nivel = texto_limpio(riesgo_parte.get("nivel"), default=nivel_riesgo)
+    riesgo_parte_rol = texto_limpio(riesgo_parte.get("rol"), default="Parte analizada")
+
+    riesgo_contraparte_score = texto_limpio(riesgo_contraparte.get("score"), default=score_total)
+    riesgo_contraparte_nivel = texto_limpio(riesgo_contraparte.get("nivel"), default=nivel_riesgo)
+    riesgo_contraparte_rol = texto_limpio(riesgo_contraparte.get("rol"), default="Contraparte")
 
     perspectiva = texto_limpio(metadata.get("perspectiva_analisis"), default="proveedor").lower()
     pais_referencia = texto_limpio(metadata.get("pais_referencia"), default="internacional").lower()
@@ -234,30 +272,45 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
     texto_pais = mapa_paises.get(pais_referencia, "Internacional / Otro")
 
     resumen_ejecutivo = texto_limpio(resumen.get("vision_general"), default="-")
-    recomendacion = texto_limpio(resumen.get("recomendacion_estrategica_final"), default="-")
+    recomendacion = texto_limpio(
+        resumen.get("recomendacion_estrategica_final")
+        or informe_cliente.get("recomendacion_profesional"),
+        default="-"
+    )
     preguntas = [texto_limpio(x, default="") for x in lista_desde_valor(detalle.get("preguntas_clave_antes_de_firmar")) if texto_limpio(x, default="")]
     conclusion = texto_limpio(detalle.get("conclusion_profesional"), default="-")
     puntos_criticos = [texto_limpio(x, default="") for x in lista_desde_valor(resumen.get("puntos_criticos")) if texto_limpio(x, default="")]
     hallazgos = [texto_limpio(x, default="") for x in lista_desde_valor(detalle.get("hallazgos_principales")) if texto_limpio(x, default="")]
     implicancias = [texto_limpio(x, default="") for x in lista_desde_valor(detalle.get("implicancias_estrategicas_mediano_plazo")) if texto_limpio(x, default="")]
 
-    titulo_resumen = "Resumen Ejecutivo para la Parte Analizada"
-    titulo_preguntas = "Preguntas Clave para la Parte Analizada Antes de Firmar"
+    nivel_riesgo_global = texto_limpio(resumen.get("nivel_riesgo_global"), default="-")
+
+    riesgos_clasificados = analisis_prof.get("riesgos_clasificados", {}) or {}
+
+    # =====================================================
+    # TÍTULO
+    # =====================================================
 
     heading_compacto("Reporte de Análisis Contractual", level=0)
 
     heading_compacto("Cómo leer este informe", level=1)
     parrafo_compacto("1. Lea el resumen ejecutivo para entender rápidamente qué significa el contrato para usted.")
-    parrafo_compacto("2. Revise el nivel de riesgo y el score total para ubicar la exposición del caso.")
-    parrafo_compacto("3. Distinga entre la parte analizada y el rol contractual detectado para evitar confusiones.")
-    parrafo_compacto("4. En la sección 'Partes del contrato' verá, cuando sea posible, el rol explícito de cada parte.")
-    parrafo_compacto("5. Tenga en cuenta el país o contexto legal de referencia indicado, ya que ciertas conclusiones pueden variar según la legislación aplicable y la práctica judicial.")
+    parrafo_compacto("2. Distinga entre severidad del contrato y riesgo para la parte analizada.")
+    parrafo_compacto("3. En la sección 'Partes del contrato' verá, cuando sea posible, el rol explícito de cada parte.")
+    parrafo_compacto("4. Tenga en cuenta el país o contexto legal de referencia indicado.")
+
+    # =====================================================
+    # IDENTIFICACIÓN
+    # =====================================================
 
     heading_compacto("Identificación clara", level=1)
     parrafo_compacto(f"Usted está analizando este contrato como: {parte_analizada_label}")
-    parrafo_compacto(f"Rol contractual detectado : {rol_contractual_detectado}")
-    if nombre_parte_analizada != "-":
-        parrafo_compacto(f"Parte analizada identificada: {nombre_parte_analizada}")
+    parrafo_compacto(f"Rol contractual detectado: {rol_contractual_detectado}")
+    parrafo_compacto(f"Parte analizada identificada: {nombre_parte_analizada}")
+
+    # =====================================================
+    # INFORMACIÓN GENERAL
+    # =====================================================
 
     heading_compacto("Información General", level=1)
     parrafo_compacto(f"Tipo de contrato: {tipo_contrato}")
@@ -265,36 +318,54 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
     parrafo_compacto(f"Precio: {precio}")
     parrafo_compacto(f"País / contexto legal de referencia: {texto_pais}")
 
+    # =====================================================
+    # PARTES
+    # =====================================================
+
     heading_compacto("Partes del contrato", level=1)
-    if not partes_con_rol:
-        parrafo_compacto("No se pudieron identificar las partes.")
+    if partes_con_rol:
+        for idx, parte in enumerate(partes_con_rol, start=1):
+            parrafo_compacto(f"Parte {idx}: {parte}")
     else:
-        for i, parte in enumerate(partes_con_rol, start=1):
-            parrafo_compacto(f"Parte {i}: {parte}")
+        parrafo_compacto("No se pudieron identificar claramente las partes.")
+
+    # =====================================================
+    # EVALUACIÓN GENERAL
+    # =====================================================
 
     heading_compacto("Evaluación General del Contrato", level=1)
-    parrafo_compacto(f"Score total: {score_total}")
-    parrafo_compacto(f"Nivel de riesgo del scoring: {nivel_riesgo}")
-    if metricas.get("cantidad_riesgos", "-") != "-":
-        parrafo_compacto(f"Cantidad de observaciones: {metricas.get('cantidad_riesgos', '-')}")
+    parrafo_compacto(f"Severidad del contrato: {severidad_contrato_score} ({severidad_contrato_nivel})")
+    parrafo_compacto(f"Riesgo para la parte analizada ({riesgo_parte_rol}): {riesgo_parte_score} ({riesgo_parte_nivel})")
+    parrafo_compacto(f"Riesgo para la contraparte ({riesgo_contraparte_rol}): {riesgo_contraparte_score} ({riesgo_contraparte_nivel})")
+
+    cantidad_riesgos = metricas.get("cantidad_riesgos", "-")
+    if cantidad_riesgos != "-":
+        parrafo_compacto(f"Cantidad de observaciones: {cantidad_riesgos}")
+
     parrafo_compacto(f"Distribución por severidad: {construir_distribucion_severidad(metricas)}")
-    parrafo_compacto("Qué significa este score:", bold=True)
-    parrafo_compacto(construir_explicacion_score(nivel_riesgo), indent=18)
 
-    equilibrio = texto_limpio(analisis_prof.get("evaluacion_equilibrio_contractual"), default="-")
-    if equilibrio != "-":
-        parrafo_compacto("Evaluación de equilibrio contractual:", bold=True)
-        parrafo_compacto(equilibrio, indent=18)
-
-    nivel_riesgo_global = texto_limpio(resumen.get("nivel_riesgo_global"), default="-")
     if nivel_riesgo_global != "-":
         parrafo_compacto(f"Nivel de riesgo global informado: {nivel_riesgo_global}")
 
-    heading_compacto(titulo_resumen, level=1)
+    parrafo_compacto("Qué significa este resultado:", bold=True)
+    parrafo_compacto(
+        f"Severidad del contrato: {construir_explicacion_nivel(severidad_contrato_nivel)} "
+        f"Riesgo para la parte analizada: {construir_explicacion_nivel(riesgo_parte_nivel)}"
+    )
+
+    # =====================================================
+    # RESUMEN EJECUTIVO
+    # =====================================================
+
+    heading_compacto("Resumen Ejecutivo para la Parte Analizada", level=1)
     if resumen_ejecutivo != "-":
         parrafo_compacto(resumen_ejecutivo)
     else:
         parrafo_compacto("No se generó resumen ejecutivo.")
+
+    # =====================================================
+    # PUNTOS CRÍTICOS
+    # =====================================================
 
     heading_compacto("Puntos Críticos Principales", level=1)
     if puntos_criticos:
@@ -303,12 +374,20 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
     else:
         parrafo_compacto("No se reportaron puntos críticos principales.")
 
+    # =====================================================
+    # HALLAZGOS
+    # =====================================================
+
     heading_compacto("Hallazgos Principales", level=1)
     if hallazgos:
         for hallazgo in hallazgos:
             parrafo_bulleted(hallazgo)
     else:
         parrafo_compacto("No se reportaron hallazgos principales.")
+
+    # =====================================================
+    # IMPLICANCIAS
+    # =====================================================
 
     heading_compacto("Implicancias Estratégicas a Mediano Plazo", level=1)
     if implicancias:
@@ -317,24 +396,40 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
     else:
         parrafo_compacto("No se reportaron implicancias estratégicas específicas.")
 
+    # =====================================================
+    # RECOMENDACIÓN
+    # =====================================================
+
     heading_compacto("Recomendación Estratégica Final", level=1)
     if recomendacion != "-":
         parrafo_compacto(recomendacion)
     else:
-        parrafo_compacto("No se reportó recomendación estratégica final.")
+        parrafo_compacto("No se generó recomendación estratégica final.")
 
-    heading_compacto(titulo_preguntas, level=1)
+    # =====================================================
+    # PREGUNTAS
+    # =====================================================
+
+    heading_compacto("Preguntas Clave para la Parte Analizada Antes de Firmar", level=1)
     if preguntas:
         for pregunta in preguntas:
             parrafo_bulleted(pregunta)
     else:
         parrafo_compacto("No se reportaron preguntas clave antes de firmar.")
 
+    # =====================================================
+    # CONCLUSIÓN
+    # =====================================================
+
     heading_compacto("Conclusión Profesional", level=1)
     if conclusion != "-":
         parrafo_compacto(conclusion)
     else:
         parrafo_compacto("No se reportó conclusión profesional.")
+
+    # =====================================================
+    # CONFIANZA
+    # =====================================================
 
     heading_compacto("Nivel de Confianza del Análisis", level=1)
     parrafo_compacto(f"Nivel general: {texto_limpio(confianza.get('general'), default='-')}")
@@ -343,6 +438,10 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
         parrafo_compacto("Fundamento:", bold=True)
         parrafo_compacto(fundamento_confianza, indent=18)
 
+    # =====================================================
+    # SISTEMA
+    # =====================================================
+
     heading_compacto("Sistema de Análisis Utilizado", level=1)
     parrafo_compacto("Motor de Inteligencia Artificial", bold=True)
     parrafo_compacto(f"Modelo utilizado: {texto_limpio(metadata.get('modelo_utilizado'), default='-')}")
@@ -350,11 +449,16 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
     parrafo_compacto(f"Perspectiva configurada internamente: {perspectiva}")
     parrafo_compacto(f"País de referencia: {texto_pais}")
 
-    parrafo_compacto("Motor de Evaluación Jurídica", bold=True)
+    parrafo_compacto("Motor Jurídico-Contractual", bold=True)
     parrafo_compacto(f"Versión del motor: {texto_limpio(metadata.get('version_servicio'), default='-')}")
     parrafo_compacto(f"Versión del scoring: {version_scoring}")
 
+    # =====================================================
+    # RESULTADOS DEL SCORING
+    # =====================================================
+
     heading_compacto("Resultados del Scoring", level=1)
+
     tabla_scoring = doc.add_table(rows=1, cols=2)
     tabla_scoring.style = "Table Grid"
 
@@ -363,12 +467,14 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
     encabezado[1].text = "Valor"
 
     filas = [
-        ("Score total", str(score_total)),
-        ("Nivel de riesgo", str(nivel_riesgo)),
+        ("Severidad del contrato", f"{severidad_contrato_score} ({severidad_contrato_nivel})"),
+        (f"Riesgo para la parte analizada ({riesgo_parte_rol})", f"{riesgo_parte_score} ({riesgo_parte_nivel})"),
+        (f"Riesgo para la contraparte ({riesgo_contraparte_rol})", f"{riesgo_contraparte_score} ({riesgo_contraparte_nivel})"),
         ("Cantidad de riesgos", str(metricas.get("cantidad_riesgos", "-"))),
     ]
 
     metricas_dinamicas = [
+        ("Riesgos críticos", metricas.get("riesgos_criticos", 0)),
         ("Riesgos altos", metricas.get("riesgos_altos", 0)),
         ("Riesgos medio-altos", metricas.get("riesgos_media_altos", 0)),
         ("Riesgos medios", metricas.get("riesgos_medios", 0)),
@@ -388,48 +494,50 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
         row[0].text = indicador
         row[1].text = valor
 
+    # =====================================================
+    # ANEXO DE RIESGOS
+    # =====================================================
+
     heading_compacto("Anexo Técnico - Detalle Ampliado de Riesgos", level=1)
 
-    riesgos_clasificados = analisis_prof.get("riesgos_clasificados", {}) or {}
     if not riesgos_clasificados:
-        parrafo_compacto("No se detectaron riesgos para ampliar.")
+        parrafo_compacto("No se detectaron riesgos clasificados.")
     else:
-        for categoria, lista_riesgos in riesgos_clasificados.items():
-            if not isinstance(lista_riesgos, list) or not lista_riesgos:
+        for categoria, riesgos in riesgos_clasificados.items():
+            heading_compacto(f"Categoría: {categoria.capitalize()}", level=2)
+
+            if not isinstance(riesgos, list) or not riesgos:
+                parrafo_compacto("Sin observaciones en esta categoría.")
                 continue
 
-            heading_compacto(f"Riesgos {categoria.capitalize()}", level=2)
-
-            for i, r in enumerate(lista_riesgos, start=1):
+            for i, r in enumerate(riesgos, start=1):
                 severidad = texto_limpio(r.get("severidad"), default="-").capitalize()
                 impacto = texto_limpio(r.get("impacto"), default="-")
                 descripcion = texto_limpio(r.get("descripcion"), default="-")
 
                 parrafo_compacto(f"Riesgo {i}", bold=True)
-                if severidad != "-":
-                    parrafo_compacto(f"Severidad: {severidad}")
+                parrafo_compacto(f"Severidad: {severidad}")
                 if impacto != "-":
                     parrafo_compacto(f"Impacto: {impacto}")
                 parrafo_compacto("Descripción:", bold=True)
                 parrafo_compacto(descripcion, indent=18)
 
-    heading_compacto("Nota jurídica de contexto", level=1)
-    parrafo_compacto(
-        "Este análisis interpreta el contrato desde la perspectiva seleccionada y dentro del contexto legal de referencia indicado. "
-        "Algunas conclusiones pueden variar según la legislación aplicable, la jurisdicción competente y la práctica judicial concreta."
-    )
+    # =====================================================
+    # CIERRE
+    # =====================================================
 
     parrafo_compacto(
         "Este informe fue generado mediante un sistema automatizado de análisis contractual "
         "basado en inteligencia artificial y un motor de evaluación jurídica propietario."
     )
 
-    base_dir = Path(__file__).resolve().parent.parent
-    output_dir = base_dir / "output"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # =====================================================
+    # GUARDADO
+    # =====================================================
 
+    os.makedirs("output", exist_ok=True)
     nombre_docx = os.path.basename(ruta_json).replace(".json", ".docx")
-    ruta_docx = output_dir / nombre_docx
-    doc.save(str(ruta_docx))
+    ruta_docx = os.path.join("output", nombre_docx)
+    doc.save(ruta_docx)
 
-    return str(ruta_docx)
+    return ruta_docx

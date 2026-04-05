@@ -34,18 +34,17 @@ La función `evaluar_reglas_relevantes(texto)` devuelve un dict con:
 - severidad mínima sugerida
 - detalle auditable de coincidencias
 
-MEJORA DE ESTA VERSIÓN
-----------------------
-Se amplía la detección monetaria para contemplar:
-- USD / US$ / dólares
-- EUR / € / euros
-- ARS / pesos argentinos
-- UYU / pesos uruguayos
+MEJORAS DE ESTA VERSIÓN
+-----------------------
+1. Mantiene detección monetaria por moneda:
+   - USD / US$ / dólares
+   - EUR / € / euros
+   - ARS / pesos argentinos
+   - UYU / pesos uruguayos
 
-Además:
-- se distinguen montos "relevantes" de montos "altos"
-- se aplican umbrales por moneda
-- se mantiene trazabilidad completa de lo detectado
+2. Agrega familias nuevas para:
+   - alquileres / arrendamientos
+   - audiovisual
 """
 
 from __future__ import annotations
@@ -53,6 +52,10 @@ from __future__ import annotations
 import re
 from typing import Dict, List, Optional
 
+
+# =========================================================
+# JERARQUÍA DE SEVERIDAD
+# =========================================================
 
 ORDEN_SEVERIDAD = {
     "baja": 1,
@@ -70,6 +73,10 @@ SEVERIDAD_POR_ORDEN = {
     5: "critica",
 }
 
+
+# =========================================================
+# UMBRALES MONETARIOS
+# =========================================================
 
 UMBRALES_MONETARIOS = {
     "USD": {
@@ -91,7 +98,14 @@ UMBRALES_MONETARIOS = {
 }
 
 
+# =========================================================
+# FAMILIAS DE RIESGO RELEVANTE
+# =========================================================
+
 REGLAS_RELEVANTES = {
+    # -----------------------------------------------------
+    # CONTRATOS GENERALES / NDA / IP
+    # -----------------------------------------------------
     "penalidad_fuerte": {
         "descripcion": "Cláusulas penales, multas o penalidades de monto importante o aplicación amplia.",
         "terminos_base": [
@@ -114,6 +128,10 @@ REGLAS_RELEVANTES = {
             "liquida",
             "exigible sin discusión",
             "exigible sin discusion",
+            "sin discusión previa",
+            "sin discusion previa",
+            "sin tope máximo",
+            "sin tope maximo",
         ],
         "requiere_monto": True,
         "severidad_minima": "media-alta",
@@ -150,6 +168,10 @@ REGLAS_RELEVANTES = {
             "exclusivos",
             "exclusiva",
             "titularidad exclusiva",
+            "máximo plazo legal",
+            "maximo plazo legal",
+            "todos los medios",
+            "todos los territorios",
         ],
         "requiere_monto": False,
         "severidad_minima": "alta",
@@ -163,6 +185,7 @@ REGLAS_RELEVANTES = {
             "confidencialidad",
             "no divulgación",
             "no divulgacion",
+            "exclusividad",
         ],
         "terminos_agravantes": [
             "10 años",
@@ -177,6 +200,7 @@ REGLAS_RELEVANTES = {
             "finalizada la relacion",
             "larga duración",
             "larga duracion",
+            "sin plazo definido",
         ],
         "requiere_monto": False,
         "severidad_minima": "media",
@@ -205,8 +229,179 @@ REGLAS_RELEVANTES = {
         "puntaje_base": 1.5,
         "puntaje_agravante": 1.0,
     },
+
+    # -----------------------------------------------------
+    # ALQUILERES / ARRENDAMIENTOS
+    # -----------------------------------------------------
+    "exoneracion_arrendador_amplia": {
+        "descripcion": "Exoneración amplia de responsabilidad del arrendador por daños, servicios o vicios.",
+        "terminos_base": [
+            "arrendador",
+            "no será responsable",
+        ],
+        "terminos_agravantes": [
+            "daños",
+            "vicios",
+            "servicios",
+            "interrupciones",
+            "defectos",
+            "exoneración",
+            "exoneracion",
+        ],
+        "requiere_monto": False,
+        "severidad_minima": "media-alta",
+        "puntaje_base": 1.8,
+        "puntaje_agravante": 1.6,
+    },
+    "resolucion_inmediata_arrendatario": {
+        "descripcion": "Resolución inmediata o automática frente a incumplimientos del arrendatario.",
+        "terminos_base": [
+            "resolución",
+            "resolucion",
+            "incumplimiento",
+        ],
+        "terminos_agravantes": [
+            "inmediata",
+            "automática",
+            "automatica",
+            "sin previo aviso",
+            "sin intimación",
+            "sin intimacion",
+            "cualquier incumplimiento",
+            "condición resolutoria",
+            "condicion resolutoria",
+        ],
+        "requiere_monto": False,
+        "severidad_minima": "media-alta",
+        "puntaje_base": 1.8,
+        "puntaje_agravante": 1.6,
+    },
+    "reajuste_locativo_sin_tope": {
+        "descripcion": "Reajuste locativo con amplitud relevante o sin tope claro.",
+        "terminos_base": [
+            "reajuste",
+        ],
+        "terminos_agravantes": [
+            "sin tope",
+            "ura",
+            "ipc",
+            "según mercado",
+            "segun mercado",
+            "anual",
+        ],
+        "requiere_monto": False,
+        "severidad_minima": "media",
+        "puntaje_base": 1.2,
+        "puntaje_agravante": 1.2,
+    },
+    "venta_sin_indemnizacion_arrendatario": {
+        "descripcion": "Facultad de vender el inmueble sin protección relevante para el arrendatario.",
+        "terminos_base": [
+            "vender",
+            "inmueble",
+        ],
+        "terminos_agravantes": [
+            "sin indemnización",
+            "sin indemnizacion",
+            "sin responsabilidad",
+            "sin compensación",
+            "sin compensacion",
+        ],
+        "requiere_monto": False,
+        "severidad_minima": "media",
+        "puntaje_base": 1.3,
+        "puntaje_agravante": 1.2,
+    },
+    "abandono_bienes_a_favor_arrendador": {
+        "descripcion": "Abandono de bienes muebles a favor del arrendador.",
+        "terminos_base": [
+            "abandono",
+            "bienes",
+        ],
+        "terminos_agravantes": [
+            "a favor del arrendador",
+            "quedarán",
+            "quedaran",
+            "irrevocable",
+            "lanzamiento",
+            "bienes muebles",
+        ],
+        "requiere_monto": False,
+        "severidad_minima": "media-alta",
+        "puntaje_base": 1.7,
+        "puntaje_agravante": 1.5,
+    },
+
+    # -----------------------------------------------------
+    # AUDIOVISUAL
+    # -----------------------------------------------------
+    "rescision_unilateral_productora": {
+        "descripcion": "Facultad amplia de rescisión unilateral por parte de la productora.",
+        "terminos_base": [
+            "rescisión",
+            "rescision",
+            "productora",
+        ],
+        "terminos_agravantes": [
+            "en cualquier momento",
+            "razones artísticas",
+            "razones artisticas",
+            "razones técnicas",
+            "razones tecnicas",
+            "sin compensación",
+            "sin compensacion",
+            "sin indemnización",
+            "sin indemnizacion",
+        ],
+        "requiere_monto": False,
+        "severidad_minima": "media-alta",
+        "puntaje_base": 1.8,
+        "puntaje_agravante": 1.5,
+    },
+    "sin_regalias_automaticas": {
+        "descripcion": "Ausencia de regalías automáticas o compensación clara por explotaciones secundarias.",
+        "terminos_base": [
+            "regalías",
+            "regalias",
+        ],
+        "terminos_agravantes": [
+            "sin regalías",
+            "sin regalias",
+            "no se prevén",
+            "no se preven",
+            "explotaciones secundarias",
+            "negociación futura",
+            "negociacion futura",
+        ],
+        "requiere_monto": False,
+        "severidad_minima": "media",
+        "puntaje_base": 1.4,
+        "puntaje_agravante": 1.3,
+    },
+    "seguro_ambiguo_o_limitado": {
+        "descripcion": "Seguro ambiguo, limitado o sin especificación clara de coberturas.",
+        "terminos_base": [
+            "seguro",
+        ],
+        "terminos_agravantes": [
+            "razonable",
+            "sin especificaciones",
+            "sin especificacion",
+            "no se especifican coberturas",
+            "solo a las jornadas de rodaje",
+            "no detalla coberturas",
+        ],
+        "requiere_monto": False,
+        "severidad_minima": "media",
+        "puntaje_base": 1.2,
+        "puntaje_agravante": 1.2,
+    },
 }
 
+
+# =========================================================
+# HELPERS
+# =========================================================
 
 def normalizar_texto(texto: str) -> str:
     texto = (texto or "").lower().strip()
@@ -229,6 +424,10 @@ def severidad_mayor(a: Optional[str], b: Optional[str]) -> Optional[str]:
 
     return a if oa >= ob else b
 
+
+# =========================================================
+# DETECCIÓN MONETARIA
+# =========================================================
 
 def extraer_numeros_candidatos(texto: str) -> List[float]:
     patrones = [
@@ -305,6 +504,10 @@ def clasificar_monto_por_moneda(texto: str) -> Dict:
         "es_alto": es_alto,
     }
 
+
+# =========================================================
+# MOTOR PRINCIPAL
+# =========================================================
 
 def evaluar_reglas_relevantes(texto: str) -> Dict:
     texto_norm = normalizar_texto(texto)

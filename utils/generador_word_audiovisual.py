@@ -4,18 +4,24 @@ AI_GPT_AUTOMATIZACION/utils/generador_word_audiovisual.py
 
 Generador de reporte Word para la vertical AUDIOVISUAL.
 
-OBJETIVO DE ESTA VERSIÓN
-------------------------
+OBJETIVO
+--------
 Alinear la salida audiovisual con el estándar final del sistema:
 - claridad de lectura
 - identificación clara
 - partes visibles humanas
-- sin exposición de dicts crudos
+- separación entre:
+    1. severidad del contrato
+    2. riesgo para la parte analizada
+    3. riesgo para la contraparte
+
+PRINCIPIO
+---------
+El Word se genera EXCLUSIVAMENTE desde el JSON final.
 """
 
 import os
 from typing import Any, Dict, List
-from pathlib import Path
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_LINE_SPACING
@@ -85,21 +91,23 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
             return texto_limpio(rol, default="-")
         return texto_limpio(valor, default="-")
 
-    def construir_explicacion_score(nivel_riesgo_texto: Any) -> str:
-        nivel = texto_limpio(nivel_riesgo_texto, default="-").lower()
+    def construir_explicacion_nivel(nivel: str) -> str:
+        nivel = texto_limpio(nivel, default="-").lower()
 
         if nivel == "bajo":
-            return "El score indica una exposición relativamente contenida. Aun así, conviene revisar las cláusulas relevantes antes de firmar."
+            return "Indica una exposición relativamente contenida."
         if nivel == "medio":
-            return "El score indica una exposición intermedia. Existen aspectos del contrato que conviene revisar o negociar."
+            return "Indica una exposición intermedia que conviene revisar."
         if nivel == "medio-alto":
-            return "El score indica una exposición importante. El contrato contiene cláusulas que merecen revisión cuidadosa antes de su firma."
+            return "Indica una exposición importante que merece revisión cuidadosa."
         if nivel == "alto":
-            return "El score indica una exposición elevada. Se recomienda una revisión prioritaria del contrato antes de avanzar."
+            return "Indica una exposición elevada y requiere revisión prioritaria."
+        if nivel == "critico":
+            return "Indica una exposición crítica y exige revisión inmediata."
 
-        return "El score es una medida numérica del riesgo total del contrato. Cuanto mayor es el valor, mayor es la exposición al riesgo."
+        return "Refleja una medida sintética del análisis contractual."
 
-    def formatear_duracion_audiovisual(nucleo: Dict[str, Any]) -> str:
+    def formatear_duracion_audiovisual(nucleo: Dict[str, Any]) -> Dict[str, str]:
         duracion_texto = texto_limpio(
             valor_no_vacio(
                 nucleo.get("duracion_texto"),
@@ -110,19 +118,23 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
             default="-"
         )
         if duracion_texto != "-":
-            return duracion_texto
+            breve = duracion_texto
+        else:
+            duracion_meses = valor_no_vacio(nucleo.get("duracion_meses"), default=None)
+            if duracion_meses not in (None, "", [], {}):
+                breve = f"{duracion_meses} meses"
+            else:
+                duracion_dias = valor_no_vacio(nucleo.get("duracion_dias"), default=None)
+                unidad_duracion = texto_limpio(nucleo.get("unidad_duracion"), default="días")
+                if duracion_dias not in (None, "", [], {}):
+                    breve = f"{duracion_dias} {unidad_duracion}"
+                else:
+                    breve = "-"
 
-        duracion_meses = valor_no_vacio(nucleo.get("duracion_meses"), default=None)
-        if duracion_meses not in (None, "", [], {}):
-            return f"{duracion_meses} meses"
-
-        duracion_dias = valor_no_vacio(nucleo.get("duracion_dias"), default=None)
-        unidad_duracion = texto_limpio(nucleo.get("unidad_duracion"), default="")
-        if duracion_dias not in (None, "", [], {}):
-            unidad = unidad_duracion if unidad_duracion else "días"
-            return f"{duracion_dias} {unidad}"
-
-        return "-"
+        return {
+            "breve": breve,
+            "detalle": duracion_texto if duracion_texto != "-" else "",
+        }
 
     def formatear_precio(nucleo: Dict[str, Any]) -> str:
         precio_total = texto_limpio(
@@ -155,6 +167,7 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
 
     def construir_distribucion_severidad(metricas: Dict[str, Any]) -> str:
         bloques = [
+            ("críticos", metricas.get("riesgos_criticos", 0)),
             ("altos", metricas.get("riesgos_altos", 0)),
             ("medio-altos", metricas.get("riesgos_media_altos", 0)),
             ("medios", metricas.get("riesgos_medios", 0)),
@@ -210,6 +223,21 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
     version_scoring = texto_limpio(scoring.get("version_scoring"), default="-")
     metricas = scoring.get("metricas", {}) or {}
 
+    severidad_contrato = scoring.get("severidad_contrato", {}) or {}
+    riesgo_parte = scoring.get("riesgo_parte_analizada", {}) or {}
+    riesgo_contraparte = scoring.get("riesgo_contraparte", {}) or {}
+
+    severidad_contrato_score = texto_limpio(severidad_contrato.get("score"), default=score_total)
+    severidad_contrato_nivel = texto_limpio(severidad_contrato.get("nivel"), default=nivel_riesgo)
+
+    riesgo_parte_score = texto_limpio(riesgo_parte.get("score"), default=score_total)
+    riesgo_parte_nivel = texto_limpio(riesgo_parte.get("nivel"), default=nivel_riesgo)
+    riesgo_parte_rol = texto_limpio(riesgo_parte.get("rol"), default="Parte analizada")
+
+    riesgo_contraparte_score = texto_limpio(riesgo_contraparte.get("score"), default=score_total)
+    riesgo_contraparte_nivel = texto_limpio(riesgo_contraparte.get("nivel"), default=nivel_riesgo)
+    riesgo_contraparte_rol = texto_limpio(riesgo_contraparte.get("rol"), default="Contraparte")
+
     perspectiva = texto_limpio(metadata.get("perspectiva_analisis"), default="proveedor").lower()
     pais_referencia = texto_limpio(metadata.get("pais_referencia"), default="internacional").lower()
 
@@ -238,45 +266,47 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
 
     heading_compacto("Cómo leer este informe", level=1)
     parrafo_compacto("1. Lea el resumen ejecutivo para entender rápidamente qué significa el contrato para usted.")
-    parrafo_compacto("2. Revise el nivel de riesgo y el score total para ubicar la exposición del caso.")
-    parrafo_compacto("3. Distinga entre la parte analizada y el rol contractual detectado para evitar confusiones.")
-    parrafo_compacto("4. En la sección 'Partes del contrato' verá, cuando sea posible, el rol explícito de cada parte.")
-    parrafo_compacto("5. Tenga en cuenta el país o contexto legal de referencia indicado, ya que ciertas conclusiones pueden variar según la legislación aplicable y la práctica judicial.")
+    parrafo_compacto("2. Distinga entre severidad del contrato y riesgo para la parte analizada.")
+    parrafo_compacto("3. En la sección 'Partes del contrato' verá, cuando sea posible, el rol explícito de cada parte.")
+    parrafo_compacto("4. Tenga en cuenta el país o contexto legal de referencia indicado.")
 
     heading_compacto("Identificación clara", level=1)
     parrafo_compacto(f"Usted está analizando este contrato como: {parte_analizada_label}")
-    parrafo_compacto(f"Rol contractual detectado : {rol_contractual_detectado}")
-    if nombre_parte_analizada != "-":
-        parrafo_compacto(f"Parte analizada identificada: {nombre_parte_analizada}")
+    parrafo_compacto(f"Rol contractual detectado: {rol_contractual_detectado}")
+    parrafo_compacto(f"Parte analizada identificada: {nombre_parte_analizada}")
 
     heading_compacto("Información General", level=1)
     parrafo_compacto(f"Tipo de contrato: {tipo_contrato}")
-    parrafo_compacto(f"Duración: {duracion}")
+    parrafo_compacto(f"Duración: {duracion['breve']}")
+    if duracion["detalle"]:
+        parrafo_compacto("Detalle del plazo:", bold=True)
+        parrafo_compacto(duracion["detalle"], indent=18)
     parrafo_compacto(f"Precio total: {precio}")
     parrafo_compacto(f"País / contexto legal de referencia: {texto_pais}")
 
     heading_compacto("Partes del contrato", level=1)
-    if not partes_con_rol:
-        parrafo_compacto("No se pudieron identificar las partes.")
+    if partes_con_rol:
+        for idx, parte in enumerate(partes_con_rol, start=1):
+            parrafo_compacto(f"Parte {idx}: {parte}")
     else:
-        for i, parte in enumerate(partes_con_rol, start=1):
-            parrafo_compacto(f"Parte {i}: {parte}")
+        parrafo_compacto("No se pudieron identificar claramente las partes.")
 
     heading_compacto("Evaluación General del Contrato", level=1)
-    parrafo_compacto(f"Score total: {score_total}")
-    parrafo_compacto(f"Nivel de riesgo: {nivel_riesgo}")
-
-    cantidad_riesgos = metricas.get("cantidad_riesgos", "-")
-    if cantidad_riesgos != "-":
-        parrafo_compacto(f"Cantidad de observaciones: {cantidad_riesgos}")
-
+    parrafo_compacto(f"Severidad del contrato: {severidad_contrato_score} ({severidad_contrato_nivel})")
+    parrafo_compacto(f"Riesgo para la parte analizada ({riesgo_parte_rol}): {riesgo_parte_score} ({riesgo_parte_nivel})")
+    parrafo_compacto(f"Riesgo para la contraparte ({riesgo_contraparte_rol}): {riesgo_contraparte_score} ({riesgo_contraparte_nivel})")
+    parrafo_compacto(f"Cantidad de observaciones: {metricas.get('cantidad_riesgos', '-')}")
     parrafo_compacto(f"Distribución por severidad: {construir_distribucion_severidad(metricas)}")
-    parrafo_compacto("Qué significa este score:", bold=True)
-    parrafo_compacto(construir_explicacion_score(nivel_riesgo), indent=18)
 
     nivel_riesgo_global = texto_limpio(resumen.get("nivel_riesgo_global"), default="-")
     if nivel_riesgo_global != "-":
         parrafo_compacto(f"Nivel de riesgo global informado: {nivel_riesgo_global}")
+
+    parrafo_compacto("Qué significa este resultado:", bold=True)
+    parrafo_compacto(
+        f"Severidad del contrato: {construir_explicacion_nivel(severidad_contrato_nivel)} "
+        f"Riesgo para la parte analizada: {construir_explicacion_nivel(riesgo_parte_nivel)}"
+    )
 
     heading_compacto("Resumen Ejecutivo para la Parte Analizada", level=1)
     vision_general = texto_limpio(resumen.get("vision_general"), default="-")
@@ -288,16 +318,16 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
     heading_compacto("Puntos Críticos Principales", level=1)
     puntos_criticos = [texto_limpio(x, default="") for x in lista_desde_valor(resumen.get("puntos_criticos")) if texto_limpio(x, default="")]
     if puntos_criticos:
-        for punto in puntos_criticos:
-            parrafo_bulleted(punto)
+        for p in puntos_criticos:
+            parrafo_bulleted(p)
     else:
         parrafo_compacto("No se reportaron puntos críticos principales.")
 
     heading_compacto("Hallazgos Principales", level=1)
     hallazgos = [texto_limpio(x, default="") for x in lista_desde_valor(detalle.get("hallazgos_principales")) if texto_limpio(x, default="")]
     if hallazgos:
-        for hallazgo in hallazgos:
-            parrafo_bulleted(hallazgo)
+        for h in hallazgos:
+            parrafo_bulleted(h)
     else:
         parrafo_compacto("No se reportaron hallazgos principales.")
 
@@ -316,7 +346,7 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
     else:
         parrafo_compacto("No se generó recomendación profesional.")
 
-    heading_compacto("Preguntas Clave para la Parte Analizada Antes de Firmar", level=1)
+    heading_compacto("Preguntas Clave Antes de Firmar", level=1)
     preguntas = [texto_limpio(x, default="") for x in lista_desde_valor(detalle.get("preguntas_clave_antes_de_firmar")) if texto_limpio(x, default="")]
     if preguntas:
         for pregunta in preguntas:
@@ -359,12 +389,14 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
     encabezado[1].text = "Valor"
 
     filas = [
-        ("Score total", str(score_total)),
-        ("Nivel de riesgo", str(nivel_riesgo)),
+        ("Severidad del contrato", f"{severidad_contrato_score} ({severidad_contrato_nivel})"),
+        (f"Riesgo para la parte analizada ({riesgo_parte_rol})", f"{riesgo_parte_score} ({riesgo_parte_nivel})"),
+        (f"Riesgo para la contraparte ({riesgo_contraparte_rol})", f"{riesgo_contraparte_score} ({riesgo_contraparte_nivel})"),
         ("Cantidad de riesgos", str(metricas.get("cantidad_riesgos", "-"))),
     ]
 
     metricas_dinamicas = [
+        ("Riesgos críticos", metricas.get("riesgos_criticos", 0)),
         ("Riesgos altos", metricas.get("riesgos_altos", 0)),
         ("Riesgos medio-altos", metricas.get("riesgos_media_altos", 0)),
         ("Riesgos medios", metricas.get("riesgos_medios", 0)),
@@ -399,6 +431,7 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
 
             if severidad != "-":
                 parrafo_compacto(f"Severidad: {severidad}")
+
             if impacto != "-":
                 parrafo_compacto(f"Impacto: {impacto}")
 
@@ -409,23 +442,14 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
                 parrafo_compacto("Sugerencia / mitigación:", bold=True)
                 parrafo_compacto(recomendacion_riesgo, indent=18)
 
-    heading_compacto("Nota jurídica de contexto", level=1)
-    parrafo_compacto(
-        "Este análisis interpreta el contrato desde la perspectiva seleccionada y dentro del contexto legal de referencia indicado. "
-        "Algunas conclusiones pueden variar según la legislación aplicable, la jurisdicción competente y la práctica judicial concreta."
-    )
-
     parrafo_compacto(
         "Este informe fue generado mediante un sistema automatizado de análisis contractual "
         "basado en inteligencia artificial y un motor de evaluación jurídica propietario."
     )
 
-    base_dir = Path(__file__).resolve().parent.parent
-    output_dir = base_dir / "output"
-    output_dir.mkdir(parents=True, exist_ok=True)
-
+    os.makedirs("output", exist_ok=True)
     nombre_docx = os.path.basename(ruta_json).replace(".json", ".docx")
-    ruta_docx = output_dir / nombre_docx
-    doc.save(str(ruta_docx))
+    ruta_docx = os.path.join("output", nombre_docx)
+    doc.save(ruta_docx)
 
-    return str(ruta_docx)
+    return ruta_docx

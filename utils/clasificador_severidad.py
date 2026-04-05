@@ -2,29 +2,28 @@
 AI_GPT_AUTOMATIZACION/utils/clasificador_severidad.py
 -----------------------------------------------------
 
-Clasificador Determinístico v5.0
-- 4 niveles principales
-- Indicadores externos en JSON
-- Reglas combinadas
-- Reglas relevantes auditables
+Clasificador Determinístico v6.0
 
 OBJETIVO
 --------
 Mantener compatibilidad con el clasificador actual,
 pero agregar una capa nueva que detecte términos y combinaciones
-jurídicamente sensibles, por ejemplo:
-- penalidades altas
-- cesión agresiva de propiedad intelectual
-- no competencia extensa
-- responsabilidad ampliada por terceros
+jurídicamente sensibles.
 
-DISEÑO
-------
-1. Se calcula una severidad base desde indicadores clásicos.
-2. Se evalúan reglas relevantes adicionales.
-3. Se toma la severidad más alta entre:
-   - severidad base
-   - severidad mínima sugerida por reglas relevantes
+MEJORAS DE ESTA VERSIÓN
+-----------------------
+1. Usa reglas relevantes ampliadas:
+   - penalidades
+   - cesión agresiva de IP
+   - no competencia extensa
+   - responsabilidad por terceros
+   - alquileres
+   - audiovisual
+
+2. Mantiene compatibilidad con indicadores clásicos
+   desde indicadores_severidad.json
+
+3. Devuelve análisis detallado auditable
 """
 
 import json
@@ -34,17 +33,25 @@ from typing import Dict, Optional
 from core.reglas_relevantes import evaluar_reglas_relevantes, ORDEN_SEVERIDAD
 
 
+# =========================================================
+# CARGA DE INDICADORES CLÁSICOS
+# =========================================================
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RUTA_REGLAS = os.path.join(BASE_DIR, "indicadores_severidad.json")
 
 
-def cargar_indicadores():
+def cargar_indicadores() -> Dict:
     with open(RUTA_REGLAS, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 INDICADORES = cargar_indicadores()
 
+
+# =========================================================
+# HELPERS
+# =========================================================
 
 def cumple_regla(texto: str, regla: dict) -> bool:
     if regla["tipo"] == "frase":
@@ -57,6 +64,9 @@ def cumple_regla(texto: str, regla: dict) -> bool:
 
 
 def _clasificar_severidad_base(descripcion: str) -> str:
+    """
+    Clasificación clásica basada en indicadores_severidad.json.
+    """
     texto = (descripcion or "").lower()
 
     for regla in INDICADORES["alta"]["reglas"]:
@@ -105,7 +115,20 @@ def clasificar_nivel(score: float) -> str:
         return "critico"
 
 
+# =========================================================
+# API DETALLADA
+# =========================================================
+
 def analizar_severidad_detallada(descripcion: str) -> Dict:
+    """
+    Devuelve:
+    - severidad_base
+    - severidad_minima_sugerida
+    - severidad_final
+    - familias_detectadas
+    - puntaje_agravante_total
+    - detalle_reglas
+    """
     severidad_base = _clasificar_severidad_base(descripcion)
     reglas = evaluar_reglas_relevantes(descripcion)
 
@@ -122,6 +145,13 @@ def analizar_severidad_detallada(descripcion: str) -> Dict:
     }
 
 
+# =========================================================
+# API SIMPLE COMPATIBLE
+# =========================================================
+
 def clasificar_severidad(descripcion: str) -> str:
+    """
+    Compatibilidad con código existente.
+    """
     analisis = analizar_severidad_detallada(descripcion)
     return analisis["severidad_final"]
