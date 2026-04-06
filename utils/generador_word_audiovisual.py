@@ -6,7 +6,9 @@ Generador de reporte Word para la vertical AUDIOVISUAL.
 
 OBJETIVO
 --------
-Alinear la salida audiovisual con el estándar final del sistema:
+Alinear la salida audiovisual con un formato más ejecutivo, más limpio
+y menos redundante, manteniendo:
+
 - claridad de lectura
 - identificación clara
 - partes visibles humanas
@@ -18,6 +20,22 @@ Alinear la salida audiovisual con el estándar final del sistema:
 PRINCIPIO
 ---------
 El Word se genera EXCLUSIVAMENTE desde el JSON final.
+
+MEJORAS DE ESTA VERSIÓN
+-----------------------
+1. Se elimina el bloque "Cómo leer este informe" del Word.
+2. Se evita duplicar duración y detalle del plazo cuando son equivalentes.
+3. Se compacta el cuerpo ejecutivo.
+4. Se eliminan bloques redundantes:
+   - Hallazgos Principales (como bloque ejecutivo separado)
+   - Implicancias Estratégicas a Mediano Plazo (como bloque ejecutivo separado)
+5. El detalle completo queda concentrado en:
+   - Resumen Ejecutivo
+   - Puntos Críticos
+   - Recomendación
+   - Preguntas
+   - Conclusión
+   - Anexo Técnico
 """
 
 import os
@@ -117,6 +135,7 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
             ),
             default="-"
         )
+
         if duracion_texto != "-":
             breve = duracion_texto
         else:
@@ -131,9 +150,11 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
                 else:
                     breve = "-"
 
+        detalle = duracion_texto if duracion_texto != "-" else ""
+
         return {
             "breve": breve,
-            "detalle": duracion_texto if duracion_texto != "-" else "",
+            "detalle": detalle,
         }
 
     def formatear_precio(nucleo: Dict[str, Any]) -> str:
@@ -184,6 +205,11 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
                 partes.append(f"{nombre} {n}")
 
         return ", ".join(partes) if partes else "sin observaciones clasificadas"
+
+    def textos_son_equivalentes(a: str, b: str) -> bool:
+        a_norm = texto_limpio(a, default="").lower()
+        b_norm = texto_limpio(b, default="").lower()
+        return a_norm == b_norm and a_norm != ""
 
     nucleo = resultado.get("nucleo_contractual", {}) or {}
     analisis_sectorial = resultado.get("analisis_sectorial", {}) or {}
@@ -262,28 +288,48 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
     }
     texto_pais = mapa_paises.get(pais_referencia, "Internacional / Otro")
 
+    vision_general = texto_limpio(resumen.get("vision_general"), default="-")
+    nivel_riesgo_global = texto_limpio(resumen.get("nivel_riesgo_global"), default="-")
+    puntos_criticos = [
+        texto_limpio(x, default="")
+        for x in lista_desde_valor(resumen.get("puntos_criticos"))
+        if texto_limpio(x, default="")
+    ]
+    preguntas = [
+        texto_limpio(x, default="")
+        for x in lista_desde_valor(detalle.get("preguntas_clave_antes_de_firmar"))
+        if texto_limpio(x, default="")
+    ]
+    conclusion = texto_limpio(detalle.get("conclusion_profesional"), default="-")
+    recomendacion = texto_limpio(informe_cliente.get("recomendacion_profesional"), default="-")
+
     heading_compacto("Reporte de Análisis Contractual Audiovisual", level=0)
 
-    heading_compacto("Cómo leer este informe", level=1)
-    parrafo_compacto("1. Lea el resumen ejecutivo para entender rápidamente qué significa el contrato para usted.")
-    parrafo_compacto("2. Distinga entre severidad del contrato y riesgo para la parte analizada.")
-    parrafo_compacto("3. En la sección 'Partes del contrato' verá, cuando sea posible, el rol explícito de cada parte.")
-    parrafo_compacto("4. Tenga en cuenta el país o contexto legal de referencia indicado.")
-
+    # =====================================================
+    # IDENTIFICACIÓN
+    # =====================================================
     heading_compacto("Identificación clara", level=1)
     parrafo_compacto(f"Usted está analizando este contrato como: {parte_analizada_label}")
     parrafo_compacto(f"Rol contractual detectado: {rol_contractual_detectado}")
     parrafo_compacto(f"Parte analizada identificada: {nombre_parte_analizada}")
 
+    # =====================================================
+    # INFORMACIÓN GENERAL
+    # =====================================================
     heading_compacto("Información General", level=1)
     parrafo_compacto(f"Tipo de contrato: {tipo_contrato}")
     parrafo_compacto(f"Duración: {duracion['breve']}")
-    if duracion["detalle"]:
+
+    if duracion["detalle"] and not textos_son_equivalentes(duracion["breve"], duracion["detalle"]):
         parrafo_compacto("Detalle del plazo:", bold=True)
         parrafo_compacto(duracion["detalle"], indent=18)
+
     parrafo_compacto(f"Precio total: {precio}")
     parrafo_compacto(f"País / contexto legal de referencia: {texto_pais}")
 
+    # =====================================================
+    # PARTES
+    # =====================================================
     heading_compacto("Partes del contrato", level=1)
     if partes_con_rol:
         for idx, parte in enumerate(partes_con_rol, start=1):
@@ -291,6 +337,9 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
     else:
         parrafo_compacto("No se pudieron identificar claramente las partes.")
 
+    # =====================================================
+    # EVALUACIÓN GENERAL
+    # =====================================================
     heading_compacto("Evaluación General del Contrato", level=1)
     parrafo_compacto(f"Severidad del contrato: {severidad_contrato_score} ({severidad_contrato_nivel})")
     parrafo_compacto(f"Riesgo para la parte analizada ({riesgo_parte_rol}): {riesgo_parte_score} ({riesgo_parte_nivel})")
@@ -298,7 +347,6 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
     parrafo_compacto(f"Cantidad de observaciones: {metricas.get('cantidad_riesgos', '-')}")
     parrafo_compacto(f"Distribución por severidad: {construir_distribucion_severidad(metricas)}")
 
-    nivel_riesgo_global = texto_limpio(resumen.get("nivel_riesgo_global"), default="-")
     if nivel_riesgo_global != "-":
         parrafo_compacto(f"Nivel de riesgo global informado: {nivel_riesgo_global}")
 
@@ -308,59 +356,56 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
         f"Riesgo para la parte analizada: {construir_explicacion_nivel(riesgo_parte_nivel)}"
     )
 
+    # =====================================================
+    # RESUMEN EJECUTIVO
+    # =====================================================
     heading_compacto("Resumen Ejecutivo para la Parte Analizada", level=1)
-    vision_general = texto_limpio(resumen.get("vision_general"), default="-")
     if vision_general != "-":
         parrafo_compacto(vision_general)
     else:
         parrafo_compacto("No se generó resumen ejecutivo.")
 
+    # =====================================================
+    # PUNTOS CRÍTICOS
+    # =====================================================
     heading_compacto("Puntos Críticos Principales", level=1)
-    puntos_criticos = [texto_limpio(x, default="") for x in lista_desde_valor(resumen.get("puntos_criticos")) if texto_limpio(x, default="")]
     if puntos_criticos:
-        for p in puntos_criticos:
+        for p in puntos_criticos[:3]:
             parrafo_bulleted(p)
     else:
         parrafo_compacto("No se reportaron puntos críticos principales.")
 
-    heading_compacto("Hallazgos Principales", level=1)
-    hallazgos = [texto_limpio(x, default="") for x in lista_desde_valor(detalle.get("hallazgos_principales")) if texto_limpio(x, default="")]
-    if hallazgos:
-        for h in hallazgos:
-            parrafo_bulleted(h)
-    else:
-        parrafo_compacto("No se reportaron hallazgos principales.")
-
-    heading_compacto("Implicancias Estratégicas a Mediano Plazo", level=1)
-    implicancias = [texto_limpio(x, default="") for x in lista_desde_valor(detalle.get("implicancias_estrategicas_mediano_plazo")) if texto_limpio(x, default="")]
-    if implicancias:
-        for item in implicancias:
-            parrafo_bulleted(item)
-    else:
-        parrafo_compacto("No se reportaron implicancias estratégicas específicas.")
-
+    # =====================================================
+    # RECOMENDACIÓN
+    # =====================================================
     heading_compacto("Recomendación Profesional", level=1)
-    recomendacion = texto_limpio(informe_cliente.get("recomendacion_profesional"), default="-")
     if recomendacion != "-":
         parrafo_compacto(recomendacion)
     else:
         parrafo_compacto("No se generó recomendación profesional.")
 
+    # =====================================================
+    # PREGUNTAS
+    # =====================================================
     heading_compacto("Preguntas Clave Antes de Firmar", level=1)
-    preguntas = [texto_limpio(x, default="") for x in lista_desde_valor(detalle.get("preguntas_clave_antes_de_firmar")) if texto_limpio(x, default="")]
     if preguntas:
-        for pregunta in preguntas:
+        for pregunta in preguntas[:6]:
             parrafo_bulleted(pregunta)
     else:
         parrafo_compacto("No se reportaron preguntas clave antes de firmar.")
 
+    # =====================================================
+    # CONCLUSIÓN
+    # =====================================================
     heading_compacto("Conclusión Profesional", level=1)
-    conclusion = texto_limpio(detalle.get("conclusion_profesional"), default="-")
     if conclusion != "-":
         parrafo_compacto(conclusion)
     else:
         parrafo_compacto("No se reportó conclusión profesional.")
 
+    # =====================================================
+    # CONFIANZA
+    # =====================================================
     heading_compacto("Nivel de Confianza del Análisis", level=1)
     parrafo_compacto(f"Nivel general: {texto_limpio(confianza.get('general'), default='-')}")
     fundamento_confianza = texto_limpio(confianza.get("fundamento"), default="-")
@@ -368,6 +413,9 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
         parrafo_compacto("Fundamento:", bold=True)
         parrafo_compacto(fundamento_confianza, indent=18)
 
+    # =====================================================
+    # SISTEMA
+    # =====================================================
     heading_compacto("Sistema de Análisis Utilizado", level=1)
     parrafo_compacto("Motor de Inteligencia Artificial", bold=True)
     parrafo_compacto(f"Modelo utilizado: {texto_limpio(metadata.get('modelo_utilizado'), default='-')}")
@@ -379,6 +427,9 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
     parrafo_compacto(f"Versión del motor: {texto_limpio(metadata.get('version_servicio'), default='-')}")
     parrafo_compacto(f"Versión del scoring: {version_scoring}")
 
+    # =====================================================
+    # SCORING
+    # =====================================================
     heading_compacto("Resultados del Scoring", level=1)
 
     tabla_scoring = doc.add_table(rows=1, cols=2)
@@ -416,6 +467,9 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
         row[0].text = indicador
         row[1].text = valor
 
+    # =====================================================
+    # ANEXO TÉCNICO
+    # =====================================================
     heading_compacto("Anexo Técnico - Detalle Ampliado de Riesgos", level=1)
 
     if not riesgos:
