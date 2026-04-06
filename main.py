@@ -17,12 +17,14 @@ Normalizar correctamente:
 
 MEJORAS PRINCIPALES DE ESTA VERSIÓN
 -----------------------------------
-1. Limpia redundancias del resumen ejecutivo
-2. Limpia puntuación menor
-3. Enriquece el scoring para separar:
-   - severidad del contrato
-   - riesgo para la parte analizada
-   - riesgo para la contraparte
+1. Limpia redundancias del resumen ejecutivo.
+2. Limpia puntuación menor.
+3. En GENERAL:
+   - enriquece el scoring con la capa dual genérica.
+4. En AUDIOVISUAL:
+   - NO usa la capa dual genérica.
+   - recalcula el scoring final con el rol correcto ya resuelto
+     desde metadata_presentacion.
 """
 
 import sys
@@ -39,8 +41,10 @@ from verticales.general.service import ejecutar_analisis_general
 
 try:
     from verticales.audiovisual.service import ejecutar_analisis_audiovisual
+    from verticales.audiovisual.scoring_engine_productor import calcular_scoring_productor
 except ImportError:
     ejecutar_analisis_audiovisual = None
+    calcular_scoring_productor = None
 
 from core.scoring_engine import enriquecer_scoring_dual
 
@@ -594,6 +598,39 @@ def generar_reporte_word_por_vertical(vertical: str, resultado: dict, ruta_outpu
     return generar_word_general(resultado, ruta_output_json)
 
 
+def _recalcular_scoring_final_audiovisual(resultado: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Recalcula el scoring audiovisual DESPUÉS de que main ya resolvió:
+    - perspectiva
+    - metadata_presentacion
+    - rol_contractual_detectado visible final
+
+    Este paso es clave para evitar que el scoring quede armado con un rol interno
+    distinto al rol final mostrado en UI y Word.
+    """
+    if not isinstance(resultado, dict):
+        return resultado
+
+    if calcular_scoring_productor is None:
+        return resultado
+
+    metadata_presentacion = (
+        resultado.get("metadata_sistema", {})
+                .get("metadata_presentacion", {})
+        or {}
+    )
+
+    rol_final = texto_limpio(
+        metadata_presentacion.get("rol_contractual_detectado"),
+        default="Artista"
+    )
+
+    return calcular_scoring_productor(
+        resultado=resultado,
+        rol_analizado=rol_final
+    )
+
+
 def ejecutar_motor(
     ruta_json: str,
     perspectiva: str = "proveedor",
@@ -647,8 +684,13 @@ def ejecutar_motor(
 
     resultado = limpiar_textos_informe(resultado)
 
-    # NUEVO: enriquecer salida dual del scoring
-    resultado = enriquecer_scoring_dual(resultado)
+    # GENERAL usa enriquecimiento dual genérico.
+    if vertical == "GENERAL":
+        resultado = enriquecer_scoring_dual(resultado)
+
+    # AUDIOVISUAL recalcula su scoring propio con el rol final visible.
+    if vertical == "AUDIOVISUAL":
+        resultado = _recalcular_scoring_final_audiovisual(resultado)
 
     ruta_output_json = guardar_reporte_json(resultado, ruta_json)
     print(f"\n📄 Reporte JSON guardado en: {ruta_output_json}")
