@@ -216,16 +216,16 @@
         }
 
         .resumen-box {
-            background: #fbfdff;
+            margin-top: 14px;
+            padding: 14px 14px;
+            border-radius: 12px;
+            background: #f8fbff;
             border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 16px 18px;
-            margin-bottom: 16px;
         }
 
-        .resumen-box h2 {
-            margin: 0 0 10px;
-            font-size: 18px;
+        .resumen-box h3 {
+            margin: 0 0 8px;
+            font-size: 17px;
         }
 
         .interpretacion-tag {
@@ -428,6 +428,12 @@
                             {% endfor %}
                         </div>
                         {% endif %}
+
+                        <div class="resumen-box">
+                            <h3>Resumen Ejecutivo para la Parte Analizada</h3>
+                            <div class="interpretacion-tag">Lectura rápida de la parte analizada</div>
+                            <div class="resumen-text">{{ resumen_web }}</div>
+                        </div>
                     </div>
 
                     <div class="panel score-card">
@@ -464,12 +470,6 @@
                             <div class="score-help">{{ ayuda_contraparte }}</div>
                         </div>
                     </div>
-                </div>
-
-                <div class="resumen-box">
-                    <h2>Resumen Ejecutivo para la Parte Analizada</h2>
-                    <div class="interpretacion-tag">Lectura rápida de la parte analizada</div>
-                    <div class="resumen-text">{{ resumen_web }}</div>
                 </div>
 
                 <div class="lang-note">
