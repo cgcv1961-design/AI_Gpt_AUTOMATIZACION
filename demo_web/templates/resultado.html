@@ -172,6 +172,13 @@
             color: var(--muted);
         }
 
+        .score-help {
+            margin-top: 8px;
+            font-size: 13px;
+            line-height: 1.45;
+            color: var(--muted);
+        }
+
         .risk-badge {
             display: inline-block;
             padding: 7px 12px;
@@ -239,30 +246,6 @@
             line-height: 1.6;
             color: var(--text);
             white-space: pre-wrap;
-        }
-
-        .mini-guide {
-            margin-bottom: 16px;
-            padding: 14px 16px;
-            border-radius: 12px;
-            background: #f8fbff;
-            border: 1px solid var(--border);
-        }
-
-        .mini-guide h3 {
-            margin: 0 0 8px;
-            font-size: 16px;
-        }
-
-        .mini-guide p {
-            margin: 0 0 6px;
-            font-size: 14px;
-            line-height: 1.55;
-            color: var(--muted);
-        }
-
-        .mini-guide p:last-child {
-            margin-bottom: 0;
         }
 
         .lang-note {
@@ -367,7 +350,6 @@
         {% set etiqueta_pais = "Internacional / Otro" %}
     {% endif %}
 
-    {# Fallbacks para no romper si api.py todavía no pasa los nuevos campos #}
     {% set severidad_contrato_score_final = severidad_contrato_score if severidad_contrato_score is defined else score_total %}
     {% set severidad_contrato_nivel_final = severidad_contrato_nivel if severidad_contrato_nivel is defined else nivel_riesgo %}
     {% set riesgo_parte_score_final = riesgo_parte_score if riesgo_parte_score is defined else score_total %}
@@ -394,6 +376,10 @@
             {% set resumen_web = "La parte analizada no aparece como la principal expuesta, aunque igualmente conviene revisar que la protección contractual sea sólida, proporcionada y sostenible." %}
         {% endif %}
     {% endif %}
+
+    {% set ayuda_severidad = "Mide qué tan exigente, agresivo o litigioso es el contrato en sí mismo." %}
+    {% set ayuda_parte = "Muestra qué tan expuesta queda la parte que está analizando el contrato desde esta perspectiva." %}
+    {% set ayuda_contraparte = "Ayuda a entender hacia qué lado se desplaza la carga principal del contrato." %}
 
     <div class="wrapper">
         <div class="card">
@@ -453,6 +439,7 @@
                                     {{ severidad_contrato_nivel_final or "-" }}
                                 </span>
                             </div>
+                            <div class="score-help">{{ ayuda_severidad }}</div>
                         </div>
 
                         <div class="score-block">
@@ -463,6 +450,7 @@
                                     {{ riesgo_parte_nivel_final or "-" }}
                                 </span>
                             </div>
+                            <div class="score-help">{{ ayuda_parte }}</div>
                         </div>
 
                         <div class="score-block">
@@ -473,15 +461,9 @@
                                     {{ riesgo_contraparte_nivel_final or "-" }}
                                 </span>
                             </div>
+                            <div class="score-help">{{ ayuda_contraparte }}</div>
                         </div>
                     </div>
-                </div>
-
-                <div class="mini-guide">
-                    <h3>Cómo leer este resultado</h3>
-                    <p><strong>1.</strong> La <strong>severidad del contrato</strong> indica qué tan exigente, agresivo o litigioso es el contrato en sí mismo.</p>
-                    <p><strong>2.</strong> El <strong>riesgo para la parte analizada</strong> muestra qué tan expuesta queda la parte que está evaluando el contrato.</p>
-                    <p><strong>3.</strong> El <strong>riesgo para la contraparte</strong> ayuda a entender hacia qué lado se desplaza la carga principal del contrato.</p>
                 </div>
 
                 <div class="resumen-box">

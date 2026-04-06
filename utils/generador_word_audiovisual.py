@@ -6,7 +6,7 @@ Generador de reporte Word para la vertical AUDIOVISUAL.
 
 OBJETIVO
 --------
-Alinear la salida audiovisual con un formato más ejecutivo, más limpio
+Alinear la salida audiovisual con un formato más ejecutivo, limpio
 y menos redundante, manteniendo:
 
 - claridad de lectura
@@ -23,19 +23,22 @@ El Word se genera EXCLUSIVAMENTE desde el JSON final.
 
 MEJORAS DE ESTA VERSIÓN
 -----------------------
-1. Se elimina el bloque "Cómo leer este informe" del Word.
+1. Se elimina el bloque "Cómo leer este informe".
 2. Se evita duplicar duración y detalle del plazo cuando son equivalentes.
-3. Se compacta el cuerpo ejecutivo.
-4. Se eliminan bloques redundantes:
-   - Hallazgos Principales (como bloque ejecutivo separado)
-   - Implicancias Estratégicas a Mediano Plazo (como bloque ejecutivo separado)
-5. El detalle completo queda concentrado en:
+3. Se elimina el bloque separado "Qué significa este resultado", porque repetía
+   demasiado el nivel ya visible en severidad y riesgo.
+4. Se mantiene el cuerpo ejecutivo corto:
+   - Identificación
+   - Información General
+   - Evaluación General
    - Resumen Ejecutivo
    - Puntos Críticos
    - Recomendación
    - Preguntas
    - Conclusión
+   - Scoring
    - Anexo Técnico
+5. El detalle largo queda concentrado en el Anexo Técnico.
 """
 
 import os
@@ -108,22 +111,6 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
                 return nombre
             return texto_limpio(rol, default="-")
         return texto_limpio(valor, default="-")
-
-    def construir_explicacion_nivel(nivel: str) -> str:
-        nivel = texto_limpio(nivel, default="-").lower()
-
-        if nivel == "bajo":
-            return "Indica una exposición relativamente contenida."
-        if nivel == "medio":
-            return "Indica una exposición intermedia que conviene revisar."
-        if nivel == "medio-alto":
-            return "Indica una exposición importante que merece revisión cuidadosa."
-        if nivel == "alto":
-            return "Indica una exposición elevada y requiere revisión prioritaria."
-        if nivel == "critico":
-            return "Indica una exposición crítica y exige revisión inmediata."
-
-        return "Refleja una medida sintética del análisis contractual."
 
     def formatear_duracion_audiovisual(nucleo: Dict[str, Any]) -> Dict[str, str]:
         duracion_texto = texto_limpio(
@@ -350,12 +337,6 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
     if nivel_riesgo_global != "-":
         parrafo_compacto(f"Nivel de riesgo global informado: {nivel_riesgo_global}")
 
-    parrafo_compacto("Qué significa este resultado:", bold=True)
-    parrafo_compacto(
-        f"Severidad del contrato: {construir_explicacion_nivel(severidad_contrato_nivel)} "
-        f"Riesgo para la parte analizada: {construir_explicacion_nivel(riesgo_parte_nivel)}"
-    )
-
     # =====================================================
     # RESUMEN EJECUTIVO
     # =====================================================
@@ -389,7 +370,7 @@ def generar_word_audiovisual(resultado: dict, ruta_json: str) -> str:
     # =====================================================
     heading_compacto("Preguntas Clave Antes de Firmar", level=1)
     if preguntas:
-        for pregunta in preguntas[:6]:
+        for pregunta in preguntas[:5]:
             parrafo_bulleted(pregunta)
     else:
         parrafo_compacto("No se reportaron preguntas clave antes de firmar.")
