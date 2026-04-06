@@ -27,6 +27,11 @@ MEJORAS DE ESTA VERSIÓN
 
 3. No inventa contenido:
    - todo sale del JSON
+
+4. Simplifica la lectura:
+   - se elimina "Cómo leer este informe"
+   - se elimina "Qué significa este resultado"
+   - se agrega "Interpretación del Resultado"
 """
 
 import os
@@ -176,21 +181,25 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
 
         return ", ".join(partes) if partes else "sin observaciones clasificadas"
 
-    def construir_explicacion_nivel(nivel: str) -> str:
-        nivel = texto_limpio(nivel, default="-").lower()
+    def construir_interpretacion_resultado(
+        severidad_nivel: str,
+        riesgo_parte_nivel: str,
+        riesgo_contraparte_nivel: str
+    ) -> str:
+        sev = texto_limpio(severidad_nivel, default="").lower()
+        parte = texto_limpio(riesgo_parte_nivel, default="").lower()
+        contra = texto_limpio(riesgo_contraparte_nivel, default="").lower()
 
-        if nivel == "bajo":
-            return "Indica una exposición relativamente contenida."
-        if nivel == "medio":
-            return "Indica una exposición intermedia que conviene revisar."
-        if nivel == "medio-alto":
-            return "Indica una exposición importante que merece revisión cuidadosa."
-        if nivel == "alto":
-            return "Indica una exposición elevada y requiere revisión prioritaria."
-        if nivel == "critico":
-            return "Indica una exposición crítica y exige revisión inmediata."
+        if sev in ["alto", "medio-alto"] and parte == "bajo":
+            return "El contrato es exigente en general, pero favorece a la parte analizada y desplaza la carga principal hacia la contraparte."
+        if sev in ["alto", "medio-alto"] and parte in ["alto", "medio-alto"]:
+            return "El contrato es exigente en general y además deja especialmente expuesta a la parte analizada."
+        if parte == "alto":
+            return "La parte analizada queda especialmente expuesta frente a este contrato."
+        if parte == "medio" and contra == "bajo":
+            return "La parte analizada enfrenta una exposición moderada, aunque superior a la de la contraparte."
 
-        return "Refleja una medida sintética del análisis contractual."
+        return "El contrato no presenta una exposición especialmente crítica para la parte analizada, aunque conviene revisar los puntos sensibles antes de firmar."
 
     # =====================================================
     # EXTRACCIÓN
@@ -226,7 +235,6 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
     duracion = formatear_duracion(nucleo, resultado)
     precio = formatear_precio(nucleo, resultado)
 
-    # Scoring nuevo
     severidad_contrato = scoring.get("severidad_contrato", {}) or {}
     riesgo_parte = scoring.get("riesgo_parte_analizada", {}) or {}
     riesgo_contraparte = scoring.get("riesgo_contraparte", {}) or {}
@@ -287,17 +295,17 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
 
     riesgos_clasificados = analisis_prof.get("riesgos_clasificados", {}) or {}
 
+    interpretacion_resultado = construir_interpretacion_resultado(
+        severidad_contrato_nivel=severidad_contrato_nivel,
+        riesgo_parte_nivel=riesgo_parte_nivel,
+        riesgo_contraparte_nivel=riesgo_contraparte_nivel
+    )
+
     # =====================================================
     # TÍTULO
     # =====================================================
 
     heading_compacto("Reporte de Análisis Contractual", level=0)
-
-    heading_compacto("Cómo leer este informe", level=1)
-    parrafo_compacto("1. Lea el resumen ejecutivo para entender rápidamente qué significa el contrato para usted.")
-    parrafo_compacto("2. Distinga entre severidad del contrato y riesgo para la parte analizada.")
-    parrafo_compacto("3. En la sección 'Partes del contrato' verá, cuando sea posible, el rol explícito de cada parte.")
-    parrafo_compacto("4. Tenga en cuenta el país o contexto legal de referencia indicado.")
 
     # =====================================================
     # IDENTIFICACIÓN
@@ -347,11 +355,12 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
     if nivel_riesgo_global != "-":
         parrafo_compacto(f"Nivel de riesgo global informado: {nivel_riesgo_global}")
 
-    parrafo_compacto("Qué significa este resultado:", bold=True)
-    parrafo_compacto(
-        f"Severidad del contrato: {construir_explicacion_nivel(severidad_contrato_nivel)} "
-        f"Riesgo para la parte analizada: {construir_explicacion_nivel(riesgo_parte_nivel)}"
-    )
+    # =====================================================
+    # INTERPRETACIÓN DEL RESULTADO
+    # =====================================================
+
+    heading_compacto("Interpretación del Resultado", level=1)
+    parrafo_compacto(interpretacion_resultado)
 
     # =====================================================
     # RESUMEN EJECUTIVO

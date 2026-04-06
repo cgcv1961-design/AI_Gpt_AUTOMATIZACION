@@ -381,6 +381,23 @@
     {% set ayuda_parte = "Muestra qué tan expuesta queda la parte que está analizando el contrato desde esta perspectiva." %}
     {% set ayuda_contraparte = "Ayuda a entender hacia qué lado se desplaza la carga principal del contrato." %}
 
+    {% set interpretacion_resultado = "" %}
+    {% set sev_nivel = (severidad_contrato_nivel_final or '') | lower %}
+    {% set parte_nivel = (riesgo_parte_nivel_final or '') | lower %}
+    {% set contra_nivel = (riesgo_contraparte_nivel_final or '') | lower %}
+
+    {% if sev_nivel in ['alto', 'medio-alto'] and parte_nivel == 'bajo' %}
+        {% set interpretacion_resultado = "El contrato es exigente en general, pero favorece a la parte analizada y desplaza la carga principal hacia la contraparte." %}
+    {% elif sev_nivel in ['alto', 'medio-alto'] and parte_nivel in ['alto', 'medio-alto'] %}
+        {% set interpretacion_resultado = "El contrato es exigente en general y además deja especialmente expuesta a la parte analizada." %}
+    {% elif parte_nivel == 'alto' %}
+        {% set interpretacion_resultado = "La parte analizada queda especialmente expuesta frente a este contrato." %}
+    {% elif parte_nivel == 'medio' and contra_nivel == 'bajo' %}
+        {% set interpretacion_resultado = "La parte analizada enfrenta una exposición moderada, aunque superior a la de la contraparte." %}
+    {% else %}
+        {% set interpretacion_resultado = "El contrato no presenta una exposición especialmente crítica para la parte analizada, aunque conviene revisar los puntos sensibles antes de firmar." %}
+    {% endif %}
+
     <div class="wrapper">
         <div class="card">
             <div class="header">
@@ -468,6 +485,11 @@
                                 </span>
                             </div>
                             <div class="score-help">{{ ayuda_contraparte }}</div>
+                        </div>
+
+                        <div class="resumen-box">
+                            <h3>Interpretación del resultado</h3>
+                            <div class="resumen-text">{{ interpretacion_resultado }}</div>
                         </div>
                     </div>
                 </div>
