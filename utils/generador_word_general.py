@@ -296,11 +296,11 @@ def generar_word_general(resultado: dict, ruta_json: str) -> str:
     riesgos_clasificados = analisis_prof.get("riesgos_clasificados", {}) or {}
 
     interpretacion_resultado = construir_interpretacion_resultado(
-        severidad_contrato_nivel=severidad_contrato_nivel,
+        severidad_nivel=severidad_contrato_nivel,
         riesgo_parte_nivel=riesgo_parte_nivel,
         riesgo_contraparte_nivel=riesgo_contraparte_nivel
     )
-
+    
     # =====================================================
     # TÍTULO
     # =====================================================
