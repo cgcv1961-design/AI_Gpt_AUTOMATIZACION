@@ -22,57 +22,16 @@ Lo toma como base y reorganiza la salida para hacerla más clara.
 
 OBJETIVO DE ESTA VERSIÓN
 ------------------------
-Corregir la direccionalidad en contratos locativos / arrendamientos
-sin romper el funcionamiento de NDA y otros contratos generales.
-
-PROBLEMA DETECTADO
-------------------
-En alquileres podían ocurrir dos cosas:
-
-1. El resumen ejecutivo mencionaba solo un lado
-   Ejemplo:
-   - "moderado para el arrendatario"
-
-   Antes:
-   - el lado mencionado tomaba ese nivel
-   - el lado faltante heredaba por defecto el nivel del contrato
-   Resultado:
-   - podía quedar más alto el arrendador que el arrendatario
-
-2. El resumen ejecutivo no mencionaba ningún rol
-   Ejemplo:
-   - "moderado"
-
-   Antes:
-   - ambos lados heredaban el mismo nivel
-   Resultado:
-   - empate artificial
-
-SOLUCIÓN DE ESTA VERSIÓN
-------------------------
-1. Si el resumen menciona explícitamente ambos roles:
-   - se respeta tal cual (esto preserva NDA)
-
-2. Si el resumen menciona solo uno:
-   - se usa ese nivel para el rol mencionado
-   - el otro se infiere con lógica contextual
-
-3. Si el resumen no menciona ninguno:
-   - se usa heurística direccional SOLO para contratos locativos
-   - para el resto se conserva el comportamiento general
-
-4. La heurística locativa NO toca la severidad del contrato.
-   Solo mejora el reparto:
-   - arrendatario / conduttore
-   - arrendador / locatore
+1. Mantener intacto el comportamiento correcto de NDA.
+2. Mejorar coherencia direccional en alquileres.
+3. Corregir inferencia de contraparte cuando `partes_con_rol` viene incompleto
+   o cuando `nucleo_contractual.partes` usa estructuras mixtas.
 """
 
 from __future__ import annotations
 
 import re
 from typing import Any, Dict, List, Optional
-
-from utils.clasificador_severidad import clasificar_nivel
 
 
 # =========================================================
@@ -92,6 +51,7 @@ def _normalizar_nivel(nivel: str) -> str:
         "bajo": "bajo",
         "medio": "medio",
         "moderado": "medio",
+        "moderado-alto": "medio-alto",
         "medio-alto": "medio-alto",
         "alto": "alto",
         "muy alto": "alto",
@@ -151,6 +111,7 @@ def _extraer_nivel_para_rol(texto: str, rol: str) -> Optional[str]:
 
     niveles = [
         "muy alto",
+        "moderado-alto",
         "medio-alto",
         "alto",
         "moderado",
@@ -173,7 +134,37 @@ def _extraer_nivel_para_rol(texto: str, rol: str) -> Optional[str]:
     return None
 
 
+# =========================================================
+# ROL CONTRAPARTE
+# =========================================================
+
+def _normalizar_rol_visible(rol: str) -> str:
+    txt = _texto(rol).lower()
+
+    if "cliente" in txt:
+        return "Cliente"
+    if "proveedor" in txt:
+        return "Proveedor"
+    if "arrendador" in txt or "locatore" in txt:
+        return "Arrendador / locatore"
+    if "arrendatario" in txt or "arrendatarios" in txt or "conduttore" in txt or "conduttori" in txt:
+        return "Arrendatarios / conduttori"
+    if "artista" in txt or "intérprete" in txt or "interprete" in txt:
+        return "Artista"
+    if "productora" in txt:
+        return "Productora"
+    if "productor" in txt:
+        return "Productor"
+
+    return _texto(rol)
+
+
 def _inferir_rol_contraparte(resultado: Dict[str, Any], rol_analizado: str) -> str:
+    """
+    1. Intenta desde metadata_presentacion.partes_con_rol
+    2. Si falla, intenta desde nucleo_contractual.partes
+    3. Si falla, usa mapa fijo
+    """
     metadata_presentacion = (
         resultado.get("metadata_sistema", {})
                 .get("metadata_presentacion", {})
@@ -190,10 +181,18 @@ def _inferir_rol_contraparte(resultado: Dict[str, Any], rol_analizado: str) -> s
             if rol_visible and rol_visible.lower() != rol_analizado_txt:
                 return rol_visible
 
+    partes_raw = (resultado.get("nucleo_contractual", {}) or {}).get("partes", []) or []
+    if isinstance(partes_raw, list):
+        for parte in partes_raw:
+            if isinstance(parte, dict):
+                rol = _texto(parte.get("rol"))
+                if rol and _normalizar_rol_visible(rol).lower() != rol_analizado_txt:
+                    return _normalizar_rol_visible(rol)
+
     mapa = {
         "cliente": "Proveedor",
         "proveedor": "Cliente",
-        "arrendador / locatore": "Arrendatario / conduttore",
+        "arrendador / locatore": "Arrendatarios / conduttori",
         "arrendatario / conduttore": "Arrendador / locatore",
         "arrendatarios / conduttori": "Arrendador / locatore",
         "artista": "Productora",
@@ -296,22 +295,11 @@ def _extraer_riesgos_clasificados(resultado: Dict[str, Any]) -> List[Dict[str, A
 
 
 def _inferir_direccion_locativa_desde_riesgo(descripcion: str) -> str:
-    """
-    Devuelve:
-    - "arrendatario"
-    - "arrendador"
-    - "ambas"
-
-    Heurística conservadora:
-    se usa SOLO en contratos locativos y SOLO para mejorar reparto,
-    no para cambiar la severidad contractual.
-    """
     txt = _texto(descripcion).lower()
 
     patrones_arrendatario = [
-        "no puede ser suspendido",
-        "no puede ser suspendida",
-        "no puede suspender",
+        "no puede suspender pagos",
+        "renuncia a suspender pagos",
         "prohibición de suspender pagos",
         "prohibicion de suspender pagos",
         "limita defensas ante incumplimientos del arrendador",
@@ -320,26 +308,25 @@ def _inferir_direccion_locativa_desde_riesgo(descripcion: str) -> str:
         "depósito de garantía",
         "deposito de garantia",
         "gastos de registro",
+        "timbres",
+        "gastos comunes",
         "gastos condominiales",
         "acceso al inmueble",
         "visitas en caso de venta",
         "nueva renta",
         "prórroga automática",
         "prorroga automatica",
-        "seis meses de antelación",
-        "seis meses de antelacion",
-        "exonera expresamente al arrendador",
-        "no será responsable",
-        "no sera responsable",
-        "interrupciones no imputables",
-        "subarriendo",
-        "comodato",
-        "mantenimiento de sistemas térmicos",
-        "mantenimiento de sistemas termicos",
+        "notificación de no renovación",
+        "notificacion de no renovacion",
+        "debe permitir el acceso",
+        "facilitar visitas",
+        "no se permite modificar el inmueble",
+        "mantenimiento y control de instalaciones",
+        "mantenimiento de instalaciones",
         "recuperar el inmueble",
-        "facultad del arrendador",
-        "limitar reclamaciones",
-        "limita reclamaciones",
+        "incertidumbre para el arrendatario",
+        "afectar su privacidad",
+        "cumplimiento de todas las obligaciones",
     ]
 
     patrones_arrendador = [
@@ -349,9 +336,8 @@ def _inferir_direccion_locativa_desde_riesgo(descripcion: str) -> str:
         "restitucion",
         "si no cumple con el uso declarado",
         "debe indemnizar",
-        "obligación del arrendador",
-        "obligacion del arrendador",
         "responsabilidad del arrendador",
+        "uso declarado por el arrendador",
     ]
 
     if any(p in txt for p in patrones_arrendatario):
@@ -369,12 +355,6 @@ def _inferir_niveles_locativos_por_clausulas(
     rol_contraparte: str,
     severidad_nivel_default: str,
 ) -> Optional[Dict[str, str]]:
-    """
-    Usa el contenido de riesgos clasificados para repartir exposición
-    en contratos locativos cuando el resumen no alcanza.
-
-    No se aplica a NDA ni a otros contratos generales.
-    """
     if not _es_contexto_locativo(resultado, rol_analizado, rol_contraparte):
         return None
 
@@ -393,20 +373,19 @@ def _inferir_niveles_locativos_por_clausulas(
         direccion = _inferir_direccion_locativa_desde_riesgo(descripcion)
 
         if direccion == "arrendatario":
-            score_arrendatario += peso * 1.0
-            score_arrendador += peso * 0.15
+            score_arrendatario += peso * 1.00
+            score_arrendador += peso * 0.12
         elif direccion == "arrendador":
-            score_arrendador += peso * 1.0
-            score_arrendatario += peso * 0.15
+            score_arrendador += peso * 1.00
+            score_arrendatario += peso * 0.12
         else:
-            score_arrendatario += peso * 0.45
-            score_arrendador += peso * 0.45
+            score_arrendatario += peso * 0.35
+            score_arrendador += peso * 0.35
 
     if score_arrendatario == 0 and score_arrendador == 0:
         return None
 
     rol_a = _texto(rol_analizado).lower()
-    rol_c = _texto(rol_contraparte).lower()
 
     if "arrendat" in rol_a or "conduttor" in rol_a:
         score_parte = score_arrendatario
@@ -419,10 +398,6 @@ def _inferir_niveles_locativos_por_clausulas(
 
     nivel_base = _normalizar_nivel(severidad_nivel_default)
 
-    # Regla de reparto:
-    # - si una parte supera claramente a la otra, se diferencia un escalón
-    # - si la supera mucho, dos escalones
-    # - si están cerca, se mantiene igual
     if score_parte >= score_contra * 1.8:
         nivel_parte = nivel_base
         nivel_contra = _bajar_nivel(nivel_base, 2)
@@ -463,22 +438,15 @@ def _obtener_niveles_direccionales(
 
     nivel_global_txt = _texto(resumen.get("nivel_riesgo_global"))
 
-    # 1. Intento explícito por rol
     nivel_parte = _extraer_nivel_para_rol(nivel_global_txt, rol_analizado)
     nivel_contraparte = _extraer_nivel_para_rol(nivel_global_txt, rol_contraparte)
 
-    # 2. Si el resumen trae ambos niveles explícitos, se respetan tal cual.
-    #    Esto preserva NDA y otros casos ya correctos.
     if nivel_parte and nivel_contraparte:
         return {
             "parte": _normalizar_nivel(nivel_parte),
             "contraparte": _normalizar_nivel(nivel_contraparte),
         }
 
-    # 3. Si es contrato locativo, intentamos inferencia por cláusulas.
-    #    Esta capa corrige justamente los casos donde el resumen es:
-    #    - genérico ("moderado")
-    #    - o menciona solo un lado ("moderado para el arrendatario")
     niveles_locativos = _inferir_niveles_locativos_por_clausulas(
         resultado=resultado,
         rol_analizado=rol_analizado,
@@ -487,7 +455,6 @@ def _obtener_niveles_direccionales(
     )
 
     if niveles_locativos:
-        # Si solo uno venía explícito, lo respetamos y completamos el otro con heurística.
         if nivel_parte and not nivel_contraparte:
             return {
                 "parte": _normalizar_nivel(nivel_parte),
@@ -498,18 +465,13 @@ def _obtener_niveles_direccionales(
                 "parte": niveles_locativos["parte"],
                 "contraparte": _normalizar_nivel(nivel_contraparte),
             }
-        # Si ninguno venía explícito, usamos la heurística locativa completa.
         return niveles_locativos
 
-    # 4. Si no es locativo y no hay niveles explícitos, mantenemos el comportamiento anterior.
     if not nivel_parte and not nivel_contraparte:
         nivel_general = _normalizar_nivel(nivel_global_txt if nivel_global_txt else nivel_default)
         nivel_parte = nivel_general
         nivel_contraparte = nivel_general
 
-    # 5. Si falta solo uno y no es locativo:
-    #    en vez de usar el nivel del contrato (que puede inflar artificialmente),
-    #    bajamos un escalón desde el que sí vino explícito.
     if nivel_parte and not nivel_contraparte:
         nivel_contraparte = _bajar_nivel(_normalizar_nivel(nivel_parte), 1)
     elif nivel_contraparte and not nivel_parte:
@@ -538,7 +500,7 @@ def enriquecer_scoring_dual(resultado: Dict[str, Any]) -> Dict[str, Any]:
     - riesgo_parte_analizada
     - riesgo_contraparte
 
-    Mantiene también aliases legacy:
+    Mantiene aliases legacy:
     - score_total
     - nivel_riesgo
     """
@@ -588,7 +550,6 @@ def enriquecer_scoring_dual(resultado: Dict[str, Any]) -> Dict[str, Any]:
         "fundamento": "Mide qué tan expuesta queda la contraparte en relación con las mismas cláusulas."
     }
 
-    # Aliases legacy: se mantienen para no romper API, Word ni UI previos.
     scoring["score_total"] = severidad_score
     scoring["nivel_riesgo"] = severidad_nivel
 
