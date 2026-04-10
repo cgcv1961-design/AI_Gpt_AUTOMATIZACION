@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 AI_GPT_AUTOMATIZACION/core/reglas_relevantes.py
 ------------------------------------------------
@@ -60,7 +61,7 @@ MEJORAS DE ESTA VERSIÓN
 
 import re
 from typing import Dict, List, Optional
-from __future__ import annotations
+
 
 
 # =========================================================
