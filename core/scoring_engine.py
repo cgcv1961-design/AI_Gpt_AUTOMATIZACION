@@ -2,7 +2,7 @@
 AI_GPT_AUTOMATIZACION/core/scoring_engine.py
 --------------------------------------------
 
-Capa de enriquecimiento dual del scoring.
+Capa de enriquecimiento dual del scoring para la vertical GENERAL.
 
 SEPARA TRES CONCEPTOS
 ---------------------
@@ -19,6 +19,12 @@ IMPORTANTE
 ----------
 No reemplaza el scoring sectorial existente.
 Lo toma como base y reorganiza la salida para hacerla más clara.
+
+ALCANCE
+-------
+Este archivo aplica a GENERAL / NDA / alquileres.
+AUDIOVISUAL utiliza su propio motor determinista en
+verticales/audiovisual/scoring_engine_productor.py.
 
 OBJETIVO DE ESTA VERSIÓN
 ------------------------

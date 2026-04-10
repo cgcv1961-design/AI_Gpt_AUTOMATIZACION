@@ -22,9 +22,16 @@ MEJORAS PRINCIPALES DE ESTA VERSIÓN
 3. En GENERAL:
    - enriquece el scoring con la capa dual genérica.
 4. En AUDIOVISUAL:
-   - NO usa la capa dual genérica.
-   - recalcula el scoring final con el rol correcto ya resuelto
-     desde metadata_presentacion.
+   - NO usa la capa dual genérica de GENERAL.
+   - recalcula el scoring final con su motor determinista propio,
+     usando el rol visible final ya resuelto desde metadata_presentacion.
+
+NOTA ARQUITECTÓNICA
+------------------
+- GENERAL / NDA / alquileres:
+  contrato -> LLM -> severidad determinística -> scoring contractual -> scoring dual
+- AUDIOVISUAL:
+  contrato -> LLM -> severidad determinística -> scoring audiovisual determinista por cláusula
 """
 
 import sys

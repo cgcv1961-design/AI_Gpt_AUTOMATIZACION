@@ -14,6 +14,11 @@ PRINCIPIO DE DISEÑO
 -------------------
 JSON = fuente única de verdad
 
+Esto significa que:
+- el modelo debe devolver un JSON suficientemente rico
+- el normalizador puede completar faltantes
+- el Word NO debe inventar contenido fuera del JSON final
+
 CRITERIO ESPECIAL
 -----------------
 La severidad NO debe ser generada por el LLM.
@@ -21,18 +26,36 @@ La severidad será calculada externamente por lógica determinística.
 
 OBJETIVO DE ESTA VERSIÓN
 ------------------------
-1. Mejorar claridad y consistencia.
-2. Reducir repeticiones entre secciones.
-3. Hacer el resumen ejecutivo realmente corto y orientado a la parte analizada.
-4. Mantener la dirección del riesgo como ayuda para la capa determinística.
-5. Evitar que el modelo genere hallazgos, implicancias, conclusión y recomendación
-   diciendo lo mismo con palabras distintas.
+Mejorar:
+- claridad
+- concisión
+- utilidad comercial
+- legibilidad para prospectos no técnicos
+
+Manteniendo:
+- estructura JSON
+- riqueza analítica
+- compatibilidad con el sistema actual
 """
 
-VERSION_PROMPT_AU = "4.3_audiovisual_json_rico_menos_redundante"
+VERSION_PROMPT_AU = "3.2_audiovisual_json_rico_claro"
 
 
 def construir_prompt_audiovisual(contrato: str) -> str:
+    """
+    Construye el prompt para la vertical AUDIOVISUAL.
+
+    Parámetros
+    ----------
+    contrato : str
+        Texto completo del contrato a analizar.
+
+    Retorna
+    -------
+    str
+        Prompt final a enviar al modelo.
+    """
+
     return f"""
 El siguiente contrato pertenece al sector audiovisual.
 Puede estar redactado en cualquier idioma.
@@ -55,117 +78,85 @@ IMPORTANTE
 2. No agregues explicación, comentario, introducción ni texto fuera del JSON.
 3. No uses markdown.
 4. No inventes datos no presentes en el contrato. Si un dato no puede inferirse, usa null o string vacío según corresponda.
-5. NO incluyas severidad en los riesgos. La severidad será calculada externamente.
-6. El objetivo es producir un JSON suficientemente rico para que luego el Word salga exclusivamente de este JSON.
-7. Evita repeticiones entre secciones. Cada bloque debe aportar algo distinto.
-8. Escribe en tono profesional, claro y concreto.
+5. NO incluyas severidad en los riesgos.
+   La severidad será calculada externamente por el sistema.
+6. El objetivo es producir un JSON suficientemente rico para que luego el Word
+   salga exclusivamente de este JSON, sin reinterpretaciones paralelas.
 
-ESTILO DE SALIDA
-----------------
-- Usar frases claras y breves.
+ESTILO DE SALIDA (OBLIGATORIO)
+------------------------------
+- Evitar repeticiones.
+- Usar frases claras y relativamente breves.
 - No sobre-explicar.
-- No repetir literalmente los mismos conceptos en resumen, puntos críticos, hallazgos, recomendación y conclusión.
-- Priorizar utilidad práctica para la toma de decisión.
-- Escribir para un usuario no técnico.
+- Cada sección debe aportar información distinta.
+- No repetir literalmente los mismos conceptos en resumen, hallazgos, recomendación y conclusión.
+- Priorizar utilidad práctica para toma de decisión.
+
+INSTRUCCIONES DE ANÁLISIS
+-------------------------
+Analiza especialmente:
 
 A) NÚCLEO CONTRACTUAL
----------------------
-Incluye:
 - tipo de contrato
 - partes
 - duración
 - precio / contraprestación
 - moneda
-- duración textual si aporta valor
+- cualquier texto de plazo si es más expresivo que una simple duración en meses
 
 B) RIESGOS SECTORIALES
-----------------------
-Cada elemento dentro de "riesgos_sectoriales" debe contener:
-- descripcion
-- impacto
-- recomendacion
-- afecta_principalmente_a
+Detecta riesgos relevantes del contrato audiovisual.
+Cada riesgo debe describirse de forma concreta, clara y breve.
 
-Valores válidos de "afecta_principalmente_a":
-- "artista"
-- "productora"
-- "ambas"
+Cada elemento dentro de "riesgos_sectoriales" debe contener EXACTAMENTE:
+- descripcion (string)
+- impacto (legal|financiero|operativo|reputacional|mixto)
+- recomendacion (string)
 
-REGLA CRÍTICA
--------------
-No omitir "afecta_principalmente_a".
-Si no es perfectamente claro, estimarlo igual según la cláusula.
-
-Ejemplos:
-- cesión amplia, falta de regalías, exclusividad, rescisión unilateral por la productora, seguro limitado -> "artista"
-- vacíos operativos o disputas estructurales -> "ambas"
-- obligaciones o cargas claras de pago/ejecución sobre la productora -> "productora"
+NO incluir severidad.
+La severidad será calculada externamente.
 
 C) RESUMEN EJECUTIVO
---------------------
-Debe ser MUY breve.
-Máximo 2 frases.
-Debe responder:
-- qué significa este contrato para la parte analizada
-- cuál es el foco principal de riesgo o ventaja
+- Máximo 3 frases.
+- Debe ser claro, profesional y útil para lectura rápida.
+- Debe incluir:
+  • idea central del contrato
+  • nivel de riesgo global
+  • 2 o 3 focos críticos si corresponde
+- No repetir literalmente toda la lista de puntos críticos.
 
-NO repetir una lista completa de cláusulas.
-NO copiar textualmente puntos críticos.
-NO usar lenguaje genérico tipo "el contrato regula..." si no aporta valor.
+D) PUNTOS CRÍTICOS PRINCIPALES
+- Lista breve.
+- Cada punto como frase corta.
+- Sin explicación adicional.
 
-D) NIVEL DE RIESGO GLOBAL
--------------------------
-Debe ser una frase breve y clara.
-Cuando sea posible, indicar la dirección del riesgo, por ejemplo:
-- "medio-alto para el artista, bajo para la productora"
-- "bajo para la productora, medio-alto para el artista"
+E) HALLAZGOS PRINCIPALES
+- Lista de observaciones relevantes.
+- Deben aportar información nueva.
+- No repetir exactamente los puntos críticos.
 
-E) PUNTOS CRÍTICOS PRINCIPALES
-------------------------------
-Lista breve.
-Máximo 3 puntos.
-Cada punto como frase corta.
-No agregar explicación.
-No repetir frases enteras del resumen ejecutivo.
+F) IMPLICANCIAS ESTRATÉGICAS
+- Consecuencias probables a mediano plazo.
+- Deben ser concretas, no abstractas.
 
-F) HALLAZGOS PRINCIPALES
-------------------------
-Lista de observaciones relevantes.
-Máximo 4.
-No repetir literalmente los puntos críticos.
-Usar esta sección para agregar contexto o matiz, no para repetir.
-Si un hallazgo ya quedó claro en puntos críticos, no volver a escribirlo igual.
+G) PREGUNTAS CLAVE ANTES DE FIRMAR
+- Preguntas concretas, útiles y accionables.
+- Deben servir para negociación o validación previa.
 
-G) IMPLICANCIAS ESTRATÉGICAS
-----------------------------
-Máximo 2.
-Consecuencias probables a mediano plazo.
-Concretas y distintas de hallazgos.
-No repetir las mismas palabras de hallazgos.
+H) CONCLUSIÓN PROFESIONAL
+- Máximo 1 párrafo.
+- Debe cerrar el análisis con claridad.
+- No repetir todo lo anterior.
 
-H) PREGUNTAS CLAVE ANTES DE FIRMAR
-----------------------------------
-Máximo 5.
-Útiles y accionables.
+I) RECOMENDACIÓN PROFESIONAL
+- Máximo 1 párrafo corto.
+- Debe ser accionable.
+- No repetir todos los hallazgos.
 
-I) CONCLUSIÓN PROFESIONAL
--------------------------
-Máximo 1 párrafo breve.
-Debe cerrar el análisis sin repetir toda la lista anterior.
-Debe sintetizar el desequilibrio o la lógica general del contrato.
-
-J) RECOMENDACIÓN PROFESIONAL
-----------------------------
-Máximo 1 párrafo corto.
-Debe ser accionable y concreta.
-No repetir literalmente la conclusión.
-Debe centrarse en qué negociar o aclarar.
-
-K) NIVEL DE CONFIANZA DEL ANÁLISIS
-----------------------------------
-Debe incluir:
+J) NIVEL DE CONFIANZA DEL ANÁLISIS
+Debe indicar:
 - general: alto | medio | bajo
-- fundamento: breve
+- fundamento: explicación breve de por qué el nivel de confianza es ese
 
 FORMATO JSON EXACTO
 -------------------
@@ -183,8 +174,7 @@ FORMATO JSON EXACTO
       {{
         "descripcion": "",
         "impacto": "legal",
-        "recomendacion": "",
-        "afecta_principalmente_a": "artista"
+        "recomendacion": ""
       }}
     ],
     "nivel_confianza_analisis": {{
@@ -207,6 +197,21 @@ FORMATO JSON EXACTO
     "recomendacion_profesional": ""
   }}
 }}
+
+REGLAS ADICIONALES DE CALIDAD
+-----------------------------
+- "vision_general" debe ser breve, clara y profesional.
+- "nivel_riesgo_global" debe ser una formulación textual simple.
+- "puntos_criticos" debe ser una lista de frases cortas.
+- "hallazgos_principales" debe ser una lista de observaciones relevantes.
+- "implicancias_estrategicas_mediano_plazo" debe ser concreta.
+- "preguntas_clave_antes_de_firmar" debe contener preguntas reales y útiles.
+- "conclusion_profesional" debe ser una síntesis técnica final.
+- "recomendacion_profesional" debe ser corta, clara y accionable.
+- Si no hay precio claro, usar null en "precio_total".
+- Si no hay duración clara en meses, usar null en "duracion_meses".
+- Si el plazo está expresado de forma narrativa y eso aporta valor, completar también "duracion_texto".
+- "partes" debe ser una lista simple de strings.
 
 Contrato:
 {contrato}
