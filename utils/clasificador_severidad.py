@@ -2,7 +2,7 @@
 AI_GPT_AUTOMATIZACION/utils/clasificador_severidad.py
 -----------------------------------------------------
 
-Clasificador Determinístico v6.0
+Clasificador Determinístico v6.1
 
 OBJETIVO
 --------
@@ -23,12 +23,18 @@ MEJORAS DE ESTA VERSIÓN
 2. Mantiene compatibilidad con indicadores clásicos
    desde indicadores_severidad.json
 
-3. Devuelve análisis detallado auditable
+3. Añade ajuste locativo conservador:
+   - si una cláusula locativa sensible activa familias específicas,
+     se evita que quede artificialmente en "baja"
+   - este ajuste solo opera sobre familias locativas bien delimitadas,
+     por lo que no afecta el comportamiento de NDA
+
+4. Devuelve análisis detallado auditable.
 """
 
 import json
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 from core.reglas_relevantes import evaluar_reglas_relevantes, ORDEN_SEVERIDAD
 
@@ -47,6 +53,23 @@ def cargar_indicadores() -> Dict:
 
 
 INDICADORES = cargar_indicadores()
+
+
+# =========================================================
+# CONSTANTES DE CONTEXTO LOCATIVO
+# =========================================================
+
+FAMILIAS_LOCATIVAS_SENSIBLES: Set[str] = {
+    "no_suspension_pagos_arrendatario",
+    "deposito_condicionado_arrendatario",
+    "pagos_iniciales_elevados_arrendatario",
+    "acceso_inmueble_privacidad_arrendatario",
+    "exoneracion_arrendador_amplia",
+    "resolucion_inmediata_arrendatario",
+    "reajuste_locativo_sin_tope",
+    "venta_sin_indemnizacion_arrendatario",
+    "abandono_bienes_a_favor_arrendador",
+}
 
 
 # =========================================================
@@ -98,6 +121,38 @@ def _severidad_mayor(a: Optional[str], b: Optional[str]) -> str:
     return a if oa >= ob else b
 
 
+def _ajuste_locativo_conservador(
+    severidad_base: str,
+    severidad_reglas: Optional[str],
+    familias_detectadas: Set[str],
+) -> str:
+    """
+    Ajuste final acotado a alquileres.
+
+    Idea:
+    - si ya hay una severidad por reglas >= media, no tocar nada
+    - si la clasificación quedó en baja pero se detectó una familia locativa
+      sensible, elevar el piso a media
+
+    Esto evita subclasificar cláusulas como:
+    - no suspender pagos
+    - depósito condicionado
+    - pagos iniciales fuertes
+    - acceso al inmueble
+
+    y no perjudica NDA porque solo opera sobre familias locativas.
+    """
+    if not (familias_detectadas & FAMILIAS_LOCATIVAS_SENSIBLES):
+        return _severidad_mayor(severidad_base, severidad_reglas)
+
+    severidad_actual = _severidad_mayor(severidad_base, severidad_reglas)
+
+    if ORDEN_SEVERIDAD.get(severidad_actual, 1) < ORDEN_SEVERIDAD["media"]:
+        return "media"
+
+    return severidad_actual
+
+
 def clasificar_nivel(score: float) -> str:
     """
     Clasificador simple de nivel a partir de score numérico.
@@ -133,13 +188,19 @@ def analizar_severidad_detallada(descripcion: str) -> Dict:
     reglas = evaluar_reglas_relevantes(descripcion)
 
     severidad_minima_sugerida = reglas.get("severidad_minima_sugerida")
-    severidad_final = _severidad_mayor(severidad_base, severidad_minima_sugerida)
+    familias_detectadas = set(reglas.get("familias_detectadas", []))
+
+    severidad_final = _ajuste_locativo_conservador(
+        severidad_base=severidad_base,
+        severidad_reglas=severidad_minima_sugerida,
+        familias_detectadas=familias_detectadas,
+    )
 
     return {
         "severidad_base": severidad_base,
         "severidad_minima_sugerida": severidad_minima_sugerida,
         "severidad_final": severidad_final,
-        "familias_detectadas": reglas.get("familias_detectadas", []),
+        "familias_detectadas": list(familias_detectadas),
         "puntaje_agravante_total": reglas.get("puntaje_agravante_total", 0.0),
         "detalle_reglas": reglas.get("detalle_reglas", []),
     }

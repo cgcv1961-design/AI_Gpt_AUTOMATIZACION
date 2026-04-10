@@ -5,7 +5,7 @@ AI_GPT_AUTOMATIZACION/core/reglas_relevantes.py
 OBJETIVO
 --------
 Definir familias de términos y reglas agravantes para que el scoring
-determinista pueda detectar cláusulas especialmente sensibles aunque
+ determinista pueda detectar cláusulas especialmente sensibles aunque
 la severidad original venga baja desde capas anteriores.
 
 PRINCIPIO
@@ -42,18 +42,25 @@ MEJORAS DE ESTA VERSIÓN
    - ARS / pesos argentinos
    - UYU / pesos uruguayos
 
-2. Ajusta reglas para evitar falsos positivos inter-verticales:
+2. Refuerza semántica locativa sin contaminar NDA:
+   - no suspensión de pagos
+   - depósito condicionado
+   - pagos iniciales elevados
+   - acceso al inmueble / visitas
+   - cargas locativas desplazadas al arrendatario
+
+3. Reduce falsos positivos inter-subdominios:
    - alquileres no debe disparar IP agresiva por la sola palabra "derechos"
    - alquileres no debe disparar rescisión audiovisual por la sola palabra "rescisión"
-   - menciones genéricas a "arrendador" o "inmueble" no deben agravar sin contexto real
+   - menciones genéricas a empleados ya no deben disparar por sí solas
+     responsabilidad ampliada por terceros
 
-3. Preserva la robustez de NDA y audiovisual.
+4. Preserva la robustez de NDA y audiovisual.
 """
-
-from __future__ import annotations
 
 import re
 from typing import Dict, List, Optional
+from __future__ import annotations
 
 
 # =========================================================
@@ -82,22 +89,10 @@ SEVERIDAD_POR_ORDEN = {
 # =========================================================
 
 UMBRALES_MONETARIOS = {
-    "USD": {
-        "relevante": 25000,
-        "alto": 100000,
-    },
-    "EUR": {
-        "relevante": 25000,
-        "alto": 100000,
-    },
-    "ARS": {
-        "relevante": 10000000,
-        "alto": 50000000,
-    },
-    "UYU": {
-        "relevante": 800000,
-        "alto": 4000000,
-    },
+    "USD": {"relevante": 25000, "alto": 100000},
+    "EUR": {"relevante": 25000, "alto": 100000},
+    "ARS": {"relevante": 10000000, "alto": 50000000},
+    "UYU": {"relevante": 800000, "alto": 4000000},
 }
 
 
@@ -224,9 +219,8 @@ REGLAS_RELEVANTES = {
             "responsabilidad solidaria",
             "responsabilidad por terceros",
             "terceros vinculados",
-            "empleados",
-            "socios",
-            "contratistas",
+            "acto de terceros",
+            "actos de terceros",
         ],
         "terminos_agravantes": [
             "cualquier tercero",
@@ -234,6 +228,9 @@ REGLAS_RELEVANTES = {
             "bajo su orbita",
             "solidaria",
             "vinculados",
+            "empleados",
+            "socios",
+            "contratistas",
         ],
         "requiere_monto": False,
         "severidad_minima": "media",
@@ -244,6 +241,101 @@ REGLAS_RELEVANTES = {
     # -----------------------------------------------------
     # ALQUILERES / ARRENDAMIENTOS
     # -----------------------------------------------------
+    "no_suspension_pagos_arrendatario": {
+        "descripcion": "Renuncia o prohibición de suspender pagos por parte del arrendatario, incluso ante controversias o incumplimientos.",
+        "terminos_base": [
+            "suspender pagos",
+            "suspensión del pago",
+            "suspension del pago",
+            "renuncia a suspender pagos",
+            "prohibición de suspender pagos",
+            "prohibicion de suspender pagos",
+        ],
+        "terminos_agravantes": [
+            "por cualquier motivo",
+            "incluso en caso de controversia",
+            "incluso en caso de disputa",
+            "incumplimientos del arrendador",
+            "gastos accesorios",
+            "alquiler",
+        ],
+        "requiere_monto": False,
+        "severidad_minima": "media-alta",
+        "puntaje_base": 1.8,
+        "puntaje_agravante": 1.6,
+    },
+
+    "deposito_condicionado_arrendatario": {
+        "descripcion": "Depósito de garantía sujeto a verificación amplia o a cumplimiento integral de obligaciones.",
+        "terminos_base": [
+            "depósito de garantía",
+            "deposito de garantia",
+            "depósito",
+            "deposito",
+        ],
+        "terminos_agravantes": [
+            "dos meses",
+            "verificación del estado del inmueble",
+            "verificacion del estado del inmueble",
+            "cumplimiento de todas las obligaciones",
+            "solo se devuelve",
+            "se devuelve tras verificación",
+            "se devuelve tras verificacion",
+        ],
+        "requiere_monto": False,
+        "severidad_minima": "media",
+        "puntaje_base": 1.4,
+        "puntaje_agravante": 1.2,
+    },
+
+    "pagos_iniciales_elevados_arrendatario": {
+        "descripcion": "Carga económica inicial exigente para el arrendatario, como mensualidades anticipadas, timbres o gastos de registro.",
+        "terminos_base": [
+            "mensualidades",
+            "mensualidades anticipadas",
+            "pago anticipadamente",
+            "pagar anticipadamente",
+            "gastos de registro",
+            "timbres",
+            "registro y timbre",
+        ],
+        "terminos_agravantes": [
+            "tres primeras mensualidades",
+            "tres mensualidades",
+            "mitad de los costes de registro",
+            "mitad de los costos de registro",
+            "principalmente sobre el arrendatario",
+            "recae principalmente sobre el arrendatario",
+        ],
+        "requiere_monto": False,
+        "severidad_minima": "media",
+        "puntaje_base": 1.3,
+        "puntaje_agravante": 1.2,
+    },
+
+    "acceso_inmueble_privacidad_arrendatario": {
+        "descripcion": "Acceso, visitas o ingreso al inmueble que puede afectar privacidad o uso pacífico del arrendatario.",
+        "terminos_base": [
+            "acceso al inmueble",
+            "permitir el acceso",
+            "debe permitir el acceso",
+            "visitas en caso de venta",
+            "facilitar visitas",
+            "debe permitir visitas",
+        ],
+        "terminos_agravantes": [
+            "privacidad",
+            "bajo ciertas condiciones",
+            "en caso de venta",
+            "nueva renta",
+            "puede afectar su privacidad",
+        ],
+        "requiere_monto": False,
+        "severidad_minima": "media",
+        "puntaje_base": 1.3,
+        "puntaje_agravante": 1.1,
+    },
+
     "exoneracion_arrendador_amplia": {
         "descripcion": "Exoneración amplia de responsabilidad del arrendador por daños, servicios o vicios.",
         "terminos_base": [
@@ -261,9 +353,9 @@ REGLAS_RELEVANTES = {
             "servicios",
             "interrupciones",
             "defectos",
-            "responsabilidad",
             "limitar reclamaciones",
             "limita reclamaciones",
+            "no imputables",
         ],
         "requiere_monto": False,
         "severidad_minima": "media-alta",
@@ -276,7 +368,6 @@ REGLAS_RELEVANTES = {
         "terminos_base": [
             "resolución inmediata",
             "resolucion inmediata",
-            "resuelto de pleno derecho",
             "resuelto de pleno derecho",
             "condición resolutoria",
             "condicion resolutoria",
@@ -347,10 +438,7 @@ REGLAS_RELEVANTES = {
 
     "abandono_bienes_a_favor_arrendador": {
         "descripcion": "Abandono de bienes muebles a favor del arrendador.",
-        "terminos_base": [
-            "abandono",
-            "bienes muebles",
-        ],
+        "terminos_base": ["abandono", "bienes muebles"],
         "terminos_agravantes": [
             "a favor del arrendador",
             "quedarán",
@@ -397,10 +485,7 @@ REGLAS_RELEVANTES = {
 
     "sin_regalias_automaticas": {
         "descripcion": "Ausencia de regalías automáticas o compensación clara por explotaciones secundarias.",
-        "terminos_base": [
-            "regalías",
-            "regalias",
-        ],
+        "terminos_base": ["regalías", "regalias"],
         "terminos_agravantes": [
             "sin regalías",
             "sin regalias",
@@ -418,9 +503,7 @@ REGLAS_RELEVANTES = {
 
     "seguro_ambiguo_o_limitado": {
         "descripcion": "Seguro ambiguo, limitado o sin especificación clara de coberturas.",
-        "terminos_base": [
-            "seguro",
-        ],
+        "terminos_base": ["seguro"],
         "terminos_agravantes": [
             "razonable",
             "sin especificaciones",
@@ -477,7 +560,7 @@ def extraer_numeros_candidatos(texto: str) -> List[float]:
     for patron in patrones:
         encontrados.extend(re.findall(patron, texto))
 
-    valores = []
+    valores: List[float] = []
     vistos = set()
 
     for valor in encontrados:
@@ -588,11 +671,7 @@ def evaluar_reglas_relevantes(texto: str) -> Dict:
             severidad_regla = severidad_mayor(severidad_regla, "alta")
 
         familias_detectadas.append(nombre_familia)
-
-        severidad_minima_global = severidad_mayor(
-            severidad_minima_global,
-            severidad_regla
-        )
+        severidad_minima_global = severidad_mayor(severidad_minima_global, severidad_regla)
 
         detalle.append({
             "familia": nombre_familia,
