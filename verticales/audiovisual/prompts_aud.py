@@ -31,14 +31,26 @@ Mejorar:
 - concisión
 - utilidad comercial
 - legibilidad para prospectos no técnicos
+- DIRECCIONALIDAD DEL RIESGO en audiovisual
+- TIPIFICACIÓN DEL RIESGO para alimentar mejor el motor determinista
 
-Manteniendo:
+MANTENIENDO
+-----------
 - estructura JSON
 - riqueza analítica
 - compatibilidad con el sistema actual
+
+NOVEDAD CLAVE
+-------------
+Cada riesgo debe intentar incluir:
+- tipo_riesgo
+- afecta_principalmente_a
+
+Esto NO reemplaza el scoring determinista.
+Solo mejora la calidad del insumo que luego será procesado por Python.
 """
 
-VERSION_PROMPT_AU = "3.2_audiovisual_json_rico_claro"
+VERSION_PROMPT_AU = "4.1_audiovisual_json_rico_con_tipificacion_y_direccion"
 
 
 def construir_prompt_audiovisual(contrato: str) -> str:
@@ -82,6 +94,9 @@ IMPORTANTE
    La severidad será calculada externamente por el sistema.
 6. El objetivo es producir un JSON suficientemente rico para que luego el Word
    salga exclusivamente de este JSON, sin reinterpretaciones paralelas.
+7. Siempre que sea posible, cada riesgo debe indicar:
+   - tipo_riesgo
+   - afecta_principalmente_a
 
 ESTILO DE SALIDA (OBLIGATORIO)
 ------------------------------
@@ -108,13 +123,44 @@ B) RIESGOS SECTORIALES
 Detecta riesgos relevantes del contrato audiovisual.
 Cada riesgo debe describirse de forma concreta, clara y breve.
 
-Cada elemento dentro de "riesgos_sectoriales" debe contener EXACTAMENTE:
+Cada elemento dentro de "riesgos_sectoriales" debe contener:
 - descripcion (string)
 - impacto (legal|financiero|operativo|reputacional|mixto)
 - recomendacion (string)
+- tipo_riesgo (string)
+- afecta_principalmente_a (artista|productora|ambas)
 
-NO incluir severidad.
-La severidad será calculada externamente.
+IMPORTANTE SOBRE tipo_riesgo
+----------------------------
+Usa, cuando corresponda, alguno de estos valores:
+
+- cesion_derechos
+- exclusividad
+- penalidad
+- plazo
+- pago
+- control_creativo
+- distribucion
+- obligaciones_operativas
+- confidencialidad
+- seguros
+- terminacion
+- jurisdiccion_conflictos
+- imagen_promocion
+- disponibilidad_artista
+
+Si no encaja perfectamente, elige el tipo más cercano.
+No inventes categorías fuera de este conjunto salvo caso excepcional.
+
+IMPORTANTE SOBRE afecta_principalmente_a
+----------------------------------------
+Debe indicar a quién afecta principalmente la cláusula:
+- artista
+- productora
+- ambas
+
+No lo decidas por simpatía con una parte.
+Piensa en quién queda más cargado, restringido, expuesto o condicionado.
 
 C) RESUMEN EJECUTIVO
 - Máximo 3 frases.
@@ -174,7 +220,9 @@ FORMATO JSON EXACTO
       {{
         "descripcion": "",
         "impacto": "legal",
-        "recomendacion": ""
+        "recomendacion": "",
+        "tipo_riesgo": "",
+        "afecta_principalmente_a": ""
       }}
     ],
     "nivel_confianza_analisis": {{

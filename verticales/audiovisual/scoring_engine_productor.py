@@ -24,6 +24,11 @@ La dirección se determina por cláusula usando:
 1. `afecta_principalmente_a` si vino bien desde la LLM
 2. una heurística determinista sectorial si ese campo falta o es ambiguo
 
+NOVEDAD DE ESTA VERSIÓN
+-----------------------
+También incorpora `tipo_riesgo` como insumo real del scoring.
+Esto permite que el motor "entienda" mejor la industria audiovisual.
+
 SALIDA
 ------
 Construye en `resultado["scoring"]`:
@@ -41,14 +46,14 @@ COMPATIBILIDAD
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 
 # =========================================================
 # CONFIGURACIÓN
 # =========================================================
 
-ALGORITMO_SCORING_VERSION = "5.5_aud_determinista_por_clausula"
+ALGORITMO_SCORING_VERSION = "6.0_aud_determinista_por_clausula_y_tipo"
 
 PESOS_SEVERIDAD_AUD = {
     "baja": 1.0,
@@ -58,17 +63,185 @@ PESOS_SEVERIDAD_AUD = {
     "critica": 10.0,
 }
 
+# Reglas reales de la industria audiovisual:
+# estas ponderaciones no reemplazan la severidad;
+# la complementan con lógica sectorial.
+PESOS_TIPO_RIESGO = {
+    "cesion_derechos": 4.0,
+    "exclusividad": 3.0,
+    "penalidad": 4.0,
+    "plazo": 1.5,
+    "pago": 2.5,
+    "control_creativo": 3.0,
+    "distribucion": 2.5,
+    "obligaciones_operativas": 1.5,
+    "confidencialidad": 1.5,
+    "seguros": 2.0,
+    "terminacion": 3.5,
+    "jurisdiccion_conflictos": 1.5,
+    "imagen_promocion": 2.5,
+    "disponibilidad_artista": 2.0,
+}
+
+TIPOS_RIESGO_VALIDOS = set(PESOS_TIPO_RIESGO.keys())
+
+# Lista explícita y documentada de reglas reales de industria.
+# Esto sirve también como referencia de negocio para seguir calibrando.
+REGLAS_REALES_INDUSTRIA = {
+    "cesion_derechos": {
+        "descripcion": "Cesión total o amplia de derechos, imagen, interpretación o explotación audiovisual.",
+        "frases_clave": [
+            "cesión",
+            "cesion",
+            "derechos",
+            "todos los medios",
+            "todos los territorios",
+            "máximo plazo legal",
+            "irrevocable",
+            "perpetua",
+            "global",
+        ],
+    },
+    "exclusividad": {
+        "descripcion": "Restricción a trabajar con terceros o en producciones competitivas.",
+        "frases_clave": [
+            "exclusividad",
+            "producciones competitivas",
+            "no podrá prestar servicios",
+            "no podrá participar",
+        ],
+    },
+    "penalidad": {
+        "descripcion": "Multas, cláusulas penales o consecuencias económicas desproporcionadas.",
+        "frases_clave": [
+            "penalidad",
+            "cláusula penal",
+            "clausula penal",
+            "multa",
+            "daños y perjuicios",
+        ],
+    },
+    "pago": {
+        "descripcion": "Forma de pago, pago fijo, ausencia de regalías, compensaciones diferidas.",
+        "frases_clave": [
+            "remuneración fija",
+            "remuneracion fija",
+            "regalías",
+            "regalias",
+            "compensación",
+            "compensacion",
+            "pago",
+            "precio",
+        ],
+    },
+    "control_creativo": {
+        "descripcion": "Control de interpretación, edición, aprobación o uso creativo concentrado en una parte.",
+        "frases_clave": [
+            "control creativo",
+            "aprobación artística",
+            "aprobacion artistica",
+            "modificar la interpretación",
+            "editar",
+            "cortar",
+            "adaptar",
+        ],
+    },
+    "seguros": {
+        "descripcion": "Coberturas limitadas, ambiguas o insuficientes para rodaje y actividades conexas.",
+        "frases_clave": [
+            "seguro",
+            "coberturas",
+            "jornadas de rodaje",
+            "sin detalle de coberturas",
+        ],
+    },
+    "terminacion": {
+        "descripcion": "Rescisión, terminación o facultad unilateral de resolver el contrato.",
+        "frases_clave": [
+            "rescisión",
+            "rescision",
+            "terminación",
+            "terminacion",
+            "resolver el contrato",
+            "rescindir",
+        ],
+    },
+    "confidencialidad": {
+        "descripcion": "Obligaciones de reserva, no divulgación o duración excesiva del deber de confidencialidad.",
+        "frases_clave": [
+            "confidencialidad",
+            "no divulgación",
+            "no divulgacion",
+            "sin plazo definido",
+        ],
+    },
+    "distribucion": {
+        "descripcion": "Licencias, plataformas, territorios o modalidades de explotación.",
+        "frases_clave": [
+            "distribución",
+            "distribucion",
+            "plataformas",
+            "licencia",
+            "territorios",
+            "ventanas de explotación",
+            "ventanas de explotacion",
+        ],
+    },
+    "obligaciones_operativas": {
+        "descripcion": "Disponibilidad, cronograma, jornadas, ensayos, desplazamientos o tareas accesorias.",
+        "frases_clave": [
+            "cronograma",
+            "jornadas",
+            "horarios",
+            "ensayos",
+            "desplazamientos",
+            "promoción",
+            "promocion",
+        ],
+    },
+    "jurisdiccion_conflictos": {
+        "descripcion": "Jurisdicción, arbitraje, mediación o resolución de controversias.",
+        "frases_clave": [
+            "jurisdicción",
+            "jurisdiccion",
+            "arbitraje",
+            "mediación",
+            "mediacion",
+            "tribunales",
+        ],
+    },
+    "imagen_promocion": {
+        "descripcion": "Uso promocional de imagen, nombre, voz o material derivado.",
+        "frases_clave": [
+            "imagen",
+            "nombre",
+            "voz",
+            "promoción",
+            "promocion",
+            "material promocional",
+        ],
+    },
+    "disponibilidad_artista": {
+        "descripcion": "Disponibilidad rígida, reprogramaciones abiertas o exigencias de presencia.",
+        "frases_clave": [
+            "disponibilidad",
+            "reprogramaciones",
+            "presentarse",
+            "asistencia",
+            "inasistencia",
+        ],
+    },
+}
+
 
 # =========================================================
 # HELPERS BÁSICOS
 # =========================================================
 
-
 def _texto(valor: Any) -> str:
     if valor in (None, "", [], {}):
         return ""
     return str(valor).strip()
-
 
 
 def _normalizar_severidad(severidad: str) -> str:
@@ -85,7 +258,6 @@ def _normalizar_severidad(severidad: str) -> str:
     return equivalencias.get(valor, "media")
 
 
-
 def _normalizar_rol(rol: str) -> str:
     valor = _texto(rol).lower()
 
@@ -99,7 +271,6 @@ def _normalizar_rol(rol: str) -> str:
     return valor or "artista"
 
 
-
 def _etiqueta_rol(rol: str) -> str:
     rol_norm = _normalizar_rol(rol)
     if rol_norm == "artista":
@@ -111,7 +282,6 @@ def _etiqueta_rol(rol: str) -> str:
     return _texto(rol) if _texto(rol) else "Contraparte"
 
 
-
 def _rol_contraparte(rol_analizado: str) -> str:
     rol = _normalizar_rol(rol_analizado)
     if rol == "artista":
@@ -121,13 +291,13 @@ def _rol_contraparte(rol_analizado: str) -> str:
     return "contraparte"
 
 
-
 def _determinar_nivel_audiovisual(score: float) -> str:
     """
     Escala cualitativa audiovisual.
 
     Se mantiene la calibración que ya venía funcionando razonablemente
-    en pruebas reales, pero asociada ahora a un reparto determinista por cláusula.
+    en pruebas reales, pero asociada ahora a un reparto determinista
+    por cláusula y también por tipo de riesgo.
     """
     if score < 10:
         return "bajo"
@@ -141,9 +311,77 @@ def _determinar_nivel_audiovisual(score: float) -> str:
 
 
 # =========================================================
-# EXTRACCIÓN DE RIESGOS
+# TIPIFICACIÓN DE RIESGOS
 # =========================================================
 
+def _normalizar_tipo_riesgo(tipo: str) -> str:
+    valor = _texto(tipo).lower().strip()
+    equivalencias = {
+        "cesion": "cesion_derechos",
+        "cesión": "cesion_derechos",
+        "cesion_derechos": "cesion_derechos",
+        "exclusividad": "exclusividad",
+        "penalidad": "penalidad",
+        "plazo": "plazo",
+        "pago": "pago",
+        "control_creativo": "control_creativo",
+        "distribucion": "distribucion",
+        "distribución": "distribucion",
+        "obligaciones_operativas": "obligaciones_operativas",
+        "confidencialidad": "confidencialidad",
+        "seguros": "seguros",
+        "terminacion": "terminacion",
+        "terminación": "terminacion",
+        "jurisdiccion_conflictos": "jurisdiccion_conflictos",
+        "jurisdicción_conflictos": "jurisdiccion_conflictos",
+        "imagen_promocion": "imagen_promocion",
+        "imagen_promoción": "imagen_promocion",
+        "disponibilidad_artista": "disponibilidad_artista",
+    }
+    return equivalencias.get(valor, "")
+
+
+def _inferir_tipo_riesgo_heuristico(riesgo: Dict[str, Any]) -> str:
+    """
+    Fallback determinista si el LLM no devolvió `tipo_riesgo`
+    o lo devolvió ambiguo.
+
+    Usa descripción + recomendación para tipificar con lógica
+    del dominio audiovisual.
+    """
+    descripcion = _texto(riesgo.get("descripcion")).lower()
+    recomendacion = _texto(riesgo.get("recomendacion")).lower()
+    impacto = _texto(riesgo.get("impacto")).lower()
+    texto = f"{descripcion} {recomendacion}".strip()
+
+    for tipo_riesgo, config in REGLAS_REALES_INDUSTRIA.items():
+        frases = config.get("frases_clave", [])
+        if any(frase in texto for frase in frases):
+            return tipo_riesgo
+
+    # fallback muy conservador
+    if impacto == "financiero":
+        return "pago"
+    if impacto == "legal":
+        return "cesion_derechos"
+    if impacto == "operativo":
+        return "obligaciones_operativas"
+    if impacto == "reputacional":
+        return "imagen_promocion"
+
+    return "obligaciones_operativas"
+
+
+def _obtener_tipo_riesgo(riesgo: Dict[str, Any]) -> str:
+    tipo_llm = _normalizar_tipo_riesgo(riesgo.get("tipo_riesgo", ""))
+    if tipo_llm in TIPOS_RIESGO_VALIDOS:
+        return tipo_llm
+    return _inferir_tipo_riesgo_heuristico(riesgo)
+
+
+# =========================================================
+# EXTRACCIÓN DE RIESGOS
+# =========================================================
 
 def _extraer_riesgos_audiovisuales(resultado: Dict[str, Any]) -> List[Dict[str, Any]]:
     riesgos = (
@@ -155,7 +393,6 @@ def _extraer_riesgos_audiovisuales(resultado: Dict[str, Any]) -> List[Dict[str, 
         return []
 
     return [r for r in riesgos if isinstance(r, dict)]
-
 
 
 def _contar_metricas(riesgos: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -174,13 +411,26 @@ def _contar_metricas(riesgos: List[Dict[str, Any]]) -> Dict[str, int]:
 # SCORE BASE CONTRACTUAL
 # =========================================================
 
-
 def _peso_base_riesgo(riesgo: Dict[str, Any]) -> float:
-    severidad = _normalizar_severidad(riesgo.get("severidad", "media"))
-    peso = PESOS_SEVERIDAD_AUD.get(severidad, 3.0)
-    agravante = float(riesgo.get("puntaje_agravante_relevante", 0.0) or 0.0)
-    return peso + agravante
+    """
+    Peso contractual base por cláusula.
 
+    Combina:
+    - severidad recalculada determinísticamente
+    - tipo_riesgo audiovisual
+    - puntaje agravante relevante (si existe)
+
+    Esto mejora mucho el dominio audiovisual sin romper la escala
+    actual que ya te venía funcionando razonablemente.
+    """
+    severidad = _normalizar_severidad(riesgo.get("severidad", "media"))
+    tipo_riesgo = _obtener_tipo_riesgo(riesgo)
+
+    peso_severidad = PESOS_SEVERIDAD_AUD.get(severidad, 3.0)
+    peso_tipo = PESOS_TIPO_RIESGO.get(tipo_riesgo, 1.5)
+    agravante = float(riesgo.get("puntaje_agravante_relevante", 0.0) or 0.0)
+
+    return peso_severidad + peso_tipo + agravante
 
 
 def _calcular_score_base_audiovisual(riesgos: List[Dict[str, Any]]) -> float:
@@ -194,7 +444,6 @@ def _calcular_score_base_audiovisual(riesgos: List[Dict[str, Any]]) -> float:
 # DIRECCIONALIDAD DETERMINISTA
 # =========================================================
 
-
 def _direccion_desde_prompt(riesgo: Dict[str, Any]) -> str:
     """
     Usa el campo `afecta_principalmente_a` cuando la LLM lo devolvió bien.
@@ -203,7 +452,6 @@ def _direccion_desde_prompt(riesgo: Dict[str, Any]) -> str:
     if direccion in ("artista", "productora", "ambas"):
         return direccion
     return ""
-
 
 
 def _inferir_direccion_heuristica(riesgo: Dict[str, Any]) -> str:
@@ -216,8 +464,32 @@ def _inferir_direccion_heuristica(riesgo: Dict[str, Any]) -> str:
     descripcion = _texto(riesgo.get("descripcion")).lower()
     recomendacion = _texto(riesgo.get("recomendacion")).lower()
     impacto = _texto(riesgo.get("impacto")).lower()
+    tipo_riesgo = _obtener_tipo_riesgo(riesgo)
     texto = f"{descripcion} {recomendacion}".strip()
 
+    # Reglas por tipo de riesgo: prioridad alta
+    if tipo_riesgo in {
+        "cesion_derechos",
+        "exclusividad",
+        "pago",
+        "control_creativo",
+        "imagen_promocion",
+        "disponibilidad_artista",
+        "seguros",
+        "confidencialidad",
+        "terminacion",
+    }:
+        return "artista"
+
+    if tipo_riesgo in {"penalidad"}:
+        if any(p in texto for p in ["penalidades a la productora", "multa a la productora", "obligación de pago de la productora", "obligacion de pago de la productora"]):
+            return "productora"
+        return "artista"
+
+    if tipo_riesgo in {"jurisdiccion_conflictos", "obligaciones_operativas", "plazo", "distribucion"}:
+        return "ambas"
+
+    # Fallback por patrones de negocio
     patrones_artista = [
         "cesión", "cesion", "derechos", "irrevocable",
         "máximo plazo legal", "maximo plazo legal",
@@ -267,8 +539,7 @@ def _inferir_direccion_heuristica(riesgo: Dict[str, Any]) -> str:
     if any(p in texto for p in patrones_ambas):
         return "ambas"
 
-    # Fallback conservador: si el impacto es legal/financiero/operativo
-    # y toca el núcleo típico de asimetría audiovisual, carga al artista.
+    # Fallback conservador
     if impacto in ("legal", "financiero", "operativo", "mixto") and any(
         k in texto for k in [
             "cesión", "cesion", "derechos", "regalías", "regalias",
@@ -279,7 +550,6 @@ def _inferir_direccion_heuristica(riesgo: Dict[str, Any]) -> str:
         return "artista"
 
     return "ambas"
-
 
 
 def _obtener_direccion_riesgo(riesgo: Dict[str, Any]) -> str:
@@ -293,8 +563,7 @@ def _obtener_direccion_riesgo(riesgo: Dict[str, Any]) -> str:
 # REPARTO DETERMINISTA DEL RIESGO
 # =========================================================
 
-
-def _repartir_score_por_rol(riesgos: List[Dict[str, Any]], rol_analizado: str) -> tuple[float, float]:
+def _repartir_score_por_rol(riesgos: List[Dict[str, Any]], rol_analizado: str) -> Tuple[float, float]:
     """
     Reglas de reparto:
     - si afecta a la parte analizada: 100% / 5%
@@ -339,7 +608,6 @@ def _repartir_score_por_rol(riesgos: List[Dict[str, Any]], rol_analizado: str) -
 # FUNCIÓN PRINCIPAL
 # =========================================================
 
-
 def calcular_scoring_productor(resultado: Dict[str, Any], rol_analizado: str = "Artista") -> Dict[str, Any]:
     """
     Aplica scoring audiovisual completamente determinista por cláusula.
@@ -360,6 +628,11 @@ def calcular_scoring_productor(resultado: Dict[str, Any], rol_analizado: str = "
     riesgos = _extraer_riesgos_audiovisuales(resultado)
     rol_norm = _normalizar_rol(rol_analizado)
     rol_contraparte = _rol_contraparte(rol_norm)
+
+    # Guardar tipo de riesgo inferido/normalizado en cada cláusula
+    # para trazabilidad interna.
+    for riesgo in riesgos:
+        riesgo["tipo_riesgo_deterministico"] = _obtener_tipo_riesgo(riesgo)
 
     severidad_score = _calcular_score_base_audiovisual(riesgos)
     severidad_nivel = _determinar_nivel_audiovisual(severidad_score)

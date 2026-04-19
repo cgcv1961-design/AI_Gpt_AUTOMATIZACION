@@ -14,10 +14,11 @@ Este módulo:
 4. Ejecuta el modelo de IA.
 5. Extrae y parsea el JSON devuelto por el modelo.
 6. Recalcula severidad de forma determinística.
-7. Normaliza la salida final a un JSON único y rico.
-8. Deja un scoring preliminar, pero NO definitivo.
-9. El scoring final audiovisual se recalcula en main.py cuando
-   ya está resuelta la perspectiva y el rol visible final.
+7. Completa tipo_riesgo y afecta_principalmente_a si faltan.
+8. Normaliza la salida final a un JSON único y rico.
+9. Deja un scoring preliminar, pero NO definitivo.
+10. El scoring final audiovisual se recalcula en main.py cuando
+    ya está resuelta la perspectiva y el rol visible final.
 
 PRINCIPIO DE DISEÑO
 -------------------
@@ -25,11 +26,10 @@ JSON = fuente de verdad única
 
 MEJORA DE ESTA VERSIÓN
 ----------------------
-Se elimina la dependencia del rol interno como fuente final del scoring.
-El scoring definitivo se deja para main.py, donde ya existe:
-- perspectiva final
-- metadata_presentacion
-- rol_contractual_detectado final
+- Se elimina la dependencia del rol interno como fuente final del scoring.
+- Se deja el scoring definitivo para main.py.
+- Se agrega fallback determinista para `tipo_riesgo`.
+- Se agrega fallback conservador para `afecta_principalmente_a`.
 """
 
 import json
@@ -126,6 +126,92 @@ def _detectar_rol_interno_audiovisual(resultado: Dict[str, Any]) -> str:
     return "Artista"
 
 
+def _inferir_tipo_riesgo_desde_texto(descripcion: str, recomendacion: str = "", impacto: str = "") -> str:
+    """
+    Fallback conservador para completar `tipo_riesgo` si el LLM no lo devuelve.
+
+    No reemplaza al motor determinista final. Solo mejora el insumo.
+    """
+    texto = f"{descripcion} {recomendacion}".lower()
+
+    if any(k in texto for k in ["cesión", "cesion", "derechos", "imagen", "interpretación", "interpretacion", "todos los medios", "todos los territorios"]):
+        return "cesion_derechos"
+
+    if any(k in texto for k in ["exclusividad", "producciones competitivas", "no podrá participar", "no podra participar"]):
+        return "exclusividad"
+
+    if any(k in texto for k in ["penalidad", "cláusula penal", "clausula penal", "multa", "daños y perjuicios"]):
+        return "penalidad"
+
+    if any(k in texto for k in ["rescisión", "rescision", "terminación", "terminacion", "resolver el contrato"]):
+        return "terminacion"
+
+    if any(k in texto for k in ["regalías", "regalias", "pago", "precio", "remuneración", "remuneracion", "compensación", "compensacion"]):
+        return "pago"
+
+    if any(k in texto for k in ["control creativo", "editar", "adaptar", "modificar la interpretación", "modificar la interpretacion"]):
+        return "control_creativo"
+
+    if any(k in texto for k in ["seguro", "cobertura", "coberturas", "rodaje"]):
+        return "seguros"
+
+    if any(k in texto for k in ["confidencialidad", "no divulgación", "no divulgacion", "reserva"]):
+        return "confidencialidad"
+
+    if any(k in texto for k in ["jurisdicción", "jurisdiccion", "tribunales", "arbitraje", "mediación", "mediacion"]):
+        return "jurisdiccion_conflictos"
+
+    if any(k in texto for k in ["distribución", "distribucion", "licencia", "plataformas", "territorios"]):
+        return "distribucion"
+
+    if any(k in texto for k in ["disponibilidad", "inasistencia", "asistencia", "presentarse"]):
+        return "disponibilidad_artista"
+
+    if any(k in texto for k in ["cronograma", "jornadas", "ensayos", "desplazamientos", "promoción", "promocion", "horarios"]):
+        return "obligaciones_operativas"
+
+    if impacto == "reputacional":
+        return "imagen_promocion"
+
+    return "obligaciones_operativas"
+
+
+def _normalizar_afecta_principalmente_a(valor: str, descripcion: str = "", tipo_riesgo: str = "") -> str:
+    """
+    Normaliza `afecta_principalmente_a`.
+
+    Si el valor falta o es ambiguo, aplica un fallback conservador.
+    """
+    v = str(valor or "").strip().lower()
+
+    if v in {"artista", "productora", "ambas"}:
+        return v
+
+    tipo = str(tipo_riesgo or "").strip().lower()
+    texto = str(descripcion or "").lower()
+
+    if tipo in {
+        "cesion_derechos",
+        "exclusividad",
+        "pago",
+        "control_creativo",
+        "imagen_promocion",
+        "disponibilidad_artista",
+        "seguros",
+        "confidencialidad",
+        "terminacion",
+    }:
+        return "artista"
+
+    if tipo in {"jurisdiccion_conflictos", "obligaciones_operativas", "plazo", "distribucion"}:
+        return "ambas"
+
+    if any(k in texto for k in ["cesión", "cesion", "derechos", "regalías", "regalias", "exclusividad", "sin detalle de coberturas"]):
+        return "artista"
+
+    return "ambas"
+
+
 def analizar_audiovisual(
     contrato: str,
     perfil: str,
@@ -175,6 +261,10 @@ def analizar_audiovisual(
                 continue
 
             descripcion = riesgo.get("descripcion", "")
+            recomendacion = riesgo.get("recomendacion", "")
+            impacto = riesgo.get("impacto", "")
+
+            # Severidad determinística por texto
             analisis = analizar_severidad_detallada(descripcion)
 
             riesgo["severidad"] = analisis["severidad_final"]
@@ -183,6 +273,23 @@ def analizar_audiovisual(
             riesgo["detalle_reglas_relevantes"] = analisis["detalle_reglas"]
             riesgo["severidad_minima_sugerida"] = analisis["severidad_minima_sugerida"]
             riesgo["puntaje_agravante_relevante"] = analisis["puntaje_agravante_total"]
+
+            # NUEVO: completar tipo_riesgo si falta
+            tipo_riesgo = riesgo.get("tipo_riesgo", "")
+            if not str(tipo_riesgo).strip():
+                tipo_riesgo = _inferir_tipo_riesgo_desde_texto(
+                    descripcion=descripcion,
+                    recomendacion=recomendacion,
+                    impacto=impacto,
+                )
+            riesgo["tipo_riesgo"] = tipo_riesgo
+
+            # NUEVO: normalizar dirección
+            riesgo["afecta_principalmente_a"] = _normalizar_afecta_principalmente_a(
+                valor=riesgo.get("afecta_principalmente_a", ""),
+                descripcion=descripcion,
+                tipo_riesgo=tipo_riesgo,
+            )
 
     resultado = normalizar_respuesta_audiovisual(
         respuesta_modelo=resultado,
@@ -206,7 +313,7 @@ def analizar_audiovisual(
         "perfil_canonico": perfil_canonico,
         "modelo_utilizado": modelo_nombre,
         "rol_detectado_interno": rol_interno,
-        "version_servicio": "4.5_audiovisual_scoring_final_en_main"
+        "version_servicio": "4.6_audiovisual_tipificacion_y_scoring_final_en_main"
     })
 
     resultado["metadata_sistema"] = metadata_sistema_existente
