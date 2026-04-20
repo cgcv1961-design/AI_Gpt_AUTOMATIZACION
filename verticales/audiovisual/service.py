@@ -30,6 +30,8 @@ MEJORA DE ESTA VERSIÓN
 - Se deja el scoring definitivo para main.py.
 - Se agrega fallback determinista para `tipo_riesgo`.
 - Se agrega fallback conservador para `afecta_principalmente_a`.
+- Se corrige priorización de `terminacion` frente a `pago`
+  en cláusulas de rescisión o resolución.
 """
 
 import json
@@ -131,43 +133,174 @@ def _inferir_tipo_riesgo_desde_texto(descripcion: str, recomendacion: str = "", 
     Fallback conservador para completar `tipo_riesgo` si el LLM no lo devuelve.
 
     No reemplaza al motor determinista final. Solo mejora el insumo.
+
+    IMPORTANTE:
+    Se prioriza `terminacion` sobre `pago` cuando la cláusula gira
+    principalmente sobre rescisión / resolución del vínculo.
     """
     texto = f"{descripcion} {recomendacion}".lower()
 
-    if any(k in texto for k in ["cesión", "cesion", "derechos", "imagen", "interpretación", "interpretacion", "todos los medios", "todos los territorios"]):
-        return "cesion_derechos"
-
-    if any(k in texto for k in ["exclusividad", "producciones competitivas", "no podrá participar", "no podra participar"]):
-        return "exclusividad"
-
-    if any(k in texto for k in ["penalidad", "cláusula penal", "clausula penal", "multa", "daños y perjuicios"]):
-        return "penalidad"
-
-    if any(k in texto for k in ["rescisión", "rescision", "terminación", "terminacion", "resolver el contrato"]):
+    # -----------------------------------------------------
+    # PRIORIDAD 1: TERMINACIÓN / RESCISIÓN
+    # -----------------------------------------------------
+    if any(k in texto for k in [
+        "rescisión",
+        "rescision",
+        "terminación",
+        "terminacion",
+        "resolver el contrato",
+        "puede rescindir",
+        "puede resolver",
+        "rescisión anticipada",
+        "rescision anticipada",
+        "pagando solo lo devengado",
+        "solo lo devengado",
+    ]):
         return "terminacion"
 
-    if any(k in texto for k in ["regalías", "regalias", "pago", "precio", "remuneración", "remuneracion", "compensación", "compensacion"]):
+    # -----------------------------------------------------
+    # PRIORIDAD 2: CESIÓN / DERECHOS / IMAGEN
+    # -----------------------------------------------------
+    if any(k in texto for k in [
+        "cesión",
+        "cesion",
+        "derechos",
+        "imagen",
+        "interpretación",
+        "interpretacion",
+        "todos los medios",
+        "todos los territorios",
+        "máximo plazo legal",
+        "maximo plazo legal",
+        "irrevocable",
+        "perpetua",
+    ]):
+        return "cesion_derechos"
+
+    # -----------------------------------------------------
+    # PRIORIDAD 3: EXCLUSIVIDAD
+    # -----------------------------------------------------
+    if any(k in texto for k in [
+        "exclusividad",
+        "producciones competitivas",
+        "no podrá participar",
+        "no podra participar",
+        "limita su participación",
+        "limita su participacion",
+    ]):
+        return "exclusividad"
+
+    # -----------------------------------------------------
+    # PRIORIDAD 4: PENALIDAD
+    # -----------------------------------------------------
+    if any(k in texto for k in [
+        "penalidad",
+        "cláusula penal",
+        "clausula penal",
+        "multa",
+        "daños y perjuicios",
+    ]):
+        return "penalidad"
+
+    # -----------------------------------------------------
+    # PRIORIDAD 5: PAGO / REGALÍAS / COMPENSACIÓN
+    # -----------------------------------------------------
+    if any(k in texto for k in [
+        "regalías",
+        "regalias",
+        "pago",
+        "precio",
+        "remuneración",
+        "remuneracion",
+        "compensación",
+        "compensacion",
+        "ingresos futuros",
+        "explotaciones secundarias",
+    ]):
         return "pago"
 
-    if any(k in texto for k in ["control creativo", "editar", "adaptar", "modificar la interpretación", "modificar la interpretacion"]):
+    # -----------------------------------------------------
+    # PRIORIDAD 6: CONTROL CREATIVO
+    # -----------------------------------------------------
+    if any(k in texto for k in [
+        "control creativo",
+        "editar",
+        "adaptar",
+        "modificar la interpretación",
+        "modificar la interpretacion",
+    ]):
         return "control_creativo"
 
-    if any(k in texto for k in ["seguro", "cobertura", "coberturas", "rodaje"]):
+    # -----------------------------------------------------
+    # PRIORIDAD 7: SEGUROS
+    # -----------------------------------------------------
+    if any(k in texto for k in [
+        "seguro",
+        "cobertura",
+        "coberturas",
+        "rodaje",
+    ]):
         return "seguros"
 
-    if any(k in texto for k in ["confidencialidad", "no divulgación", "no divulgacion", "reserva"]):
+    # -----------------------------------------------------
+    # PRIORIDAD 8: CONFIDENCIALIDAD
+    # -----------------------------------------------------
+    if any(k in texto for k in [
+        "confidencialidad",
+        "no divulgación",
+        "no divulgacion",
+        "reserva",
+    ]):
         return "confidencialidad"
 
-    if any(k in texto for k in ["jurisdicción", "jurisdiccion", "tribunales", "arbitraje", "mediación", "mediacion"]):
+    # -----------------------------------------------------
+    # PRIORIDAD 9: JURISDICCIÓN / CONFLICTOS
+    # -----------------------------------------------------
+    if any(k in texto for k in [
+        "jurisdicción",
+        "jurisdiccion",
+        "tribunales",
+        "arbitraje",
+        "mediación",
+        "mediacion",
+    ]):
         return "jurisdiccion_conflictos"
 
-    if any(k in texto for k in ["distribución", "distribucion", "licencia", "plataformas", "territorios"]):
+    # -----------------------------------------------------
+    # PRIORIDAD 10: DISTRIBUCIÓN / LICENCIA
+    # -----------------------------------------------------
+    if any(k in texto for k in [
+        "distribución",
+        "distribucion",
+        "licencia",
+        "plataformas",
+        "territorios",
+    ]):
         return "distribucion"
 
-    if any(k in texto for k in ["disponibilidad", "inasistencia", "asistencia", "presentarse"]):
+    # -----------------------------------------------------
+    # PRIORIDAD 11: DISPONIBILIDAD ARTISTA
+    # -----------------------------------------------------
+    if any(k in texto for k in [
+        "disponibilidad",
+        "inasistencia",
+        "asistencia",
+        "presentarse",
+    ]):
         return "disponibilidad_artista"
 
-    if any(k in texto for k in ["cronograma", "jornadas", "ensayos", "desplazamientos", "promoción", "promocion", "horarios"]):
+    # -----------------------------------------------------
+    # PRIORIDAD 12: OBLIGACIONES OPERATIVAS
+    # -----------------------------------------------------
+    if any(k in texto for k in [
+        "cronograma",
+        "jornadas",
+        "ensayos",
+        "desplazamientos",
+        "promoción",
+        "promocion",
+        "horarios",
+    ]):
         return "obligaciones_operativas"
 
     if impacto == "reputacional":
@@ -206,7 +339,17 @@ def _normalizar_afecta_principalmente_a(valor: str, descripcion: str = "", tipo_
     if tipo in {"jurisdiccion_conflictos", "obligaciones_operativas", "plazo", "distribucion"}:
         return "ambas"
 
-    if any(k in texto for k in ["cesión", "cesion", "derechos", "regalías", "regalias", "exclusividad", "sin detalle de coberturas"]):
+    if any(k in texto for k in [
+        "cesión",
+        "cesion",
+        "derechos",
+        "regalías",
+        "regalias",
+        "exclusividad",
+        "sin detalle de coberturas",
+        "rescisión",
+        "rescision",
+    ]):
         return "artista"
 
     return "ambas"
@@ -274,7 +417,7 @@ def analizar_audiovisual(
             riesgo["severidad_minima_sugerida"] = analisis["severidad_minima_sugerida"]
             riesgo["puntaje_agravante_relevante"] = analisis["puntaje_agravante_total"]
 
-            # NUEVO: completar tipo_riesgo si falta
+            # Completar tipo_riesgo si falta
             tipo_riesgo = riesgo.get("tipo_riesgo", "")
             if not str(tipo_riesgo).strip():
                 tipo_riesgo = _inferir_tipo_riesgo_desde_texto(
@@ -284,7 +427,7 @@ def analizar_audiovisual(
                 )
             riesgo["tipo_riesgo"] = tipo_riesgo
 
-            # NUEVO: normalizar dirección
+            # Normalizar dirección
             riesgo["afecta_principalmente_a"] = _normalizar_afecta_principalmente_a(
                 valor=riesgo.get("afecta_principalmente_a", ""),
                 descripcion=descripcion,
@@ -313,7 +456,7 @@ def analizar_audiovisual(
         "perfil_canonico": perfil_canonico,
         "modelo_utilizado": modelo_nombre,
         "rol_detectado_interno": rol_interno,
-        "version_servicio": "4.6_audiovisual_tipificacion_y_scoring_final_en_main"
+        "version_servicio": "4.7_audiovisual_terminacion_y_severidad_mejorada"
     })
 
     resultado["metadata_sistema"] = metadata_sistema_existente

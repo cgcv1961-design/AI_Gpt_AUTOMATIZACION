@@ -33,6 +33,7 @@ Mejorar:
 - legibilidad para prospectos no técnicos
 - DIRECCIONALIDAD DEL RIESGO en audiovisual
 - TIPIFICACIÓN DEL RIESGO para alimentar mejor el motor determinista
+- MEJOR TIPIFICACIÓN DE TERMINACIÓN / RESCISIÓN
 
 MANTENIENDO
 -----------
@@ -50,7 +51,7 @@ Esto NO reemplaza el scoring determinista.
 Solo mejora la calidad del insumo que luego será procesado por Python.
 """
 
-VERSION_PROMPT_AU = "4.1_audiovisual_json_rico_con_tipificacion_y_direccion"
+VERSION_PROMPT_AU = "4.2_audiovisual_json_rico_con_tipificacion_direccion_y_rescision"
 
 
 def construir_prompt_audiovisual(contrato: str) -> str:
@@ -151,6 +152,20 @@ Usa, cuando corresponda, alguno de estos valores:
 
 Si no encaja perfectamente, elige el tipo más cercano.
 No inventes categorías fuera de este conjunto salvo caso excepcional.
+
+ACLARACIÓN IMPORTANTE SOBRE terminacion
+---------------------------------------
+Si una cláusula habla de:
+- rescisión
+- rescisión unilateral
+- terminación anticipada
+- facultad de resolver el contrato
+- pago solo de lo devengado ante finalización
+entonces debe clasificarse preferentemente como:
+- terminacion
+
+NO usar "pago" como tipo principal si el núcleo de la cláusula
+es la facultad de terminar o rescindir el vínculo.
 
 IMPORTANTE SOBRE afecta_principalmente_a
 ----------------------------------------

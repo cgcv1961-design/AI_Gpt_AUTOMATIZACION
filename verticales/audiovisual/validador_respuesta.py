@@ -23,6 +23,12 @@ IMPORTANTE
 USO
 ---
 Se puede usar antes o después del normalizador, dependiendo del flujo.
+
+MEJORA DE ESTA VERSIÓN
+----------------------
+Se conserva compatibilidad con la estructura actual y se valida
+con mayor claridad la tipificación audiovisual, incluyendo
+`terminacion` como categoría esperada.
 """
 
 from typing import Dict, Any, List
